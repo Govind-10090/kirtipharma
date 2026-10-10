@@ -1,9 +1,10 @@
-// ===== KIRTI PHARMA BACKEND — prescriptions.js (SQLite Powered) =====
+// ===== KIRTI PHARMA BACKEND — prescriptions.js (Supabase Cloud + SQLite) =====
 // Prescription Upload, Pharmacist Review Queue & Bill Generation with Stock Deduction
 
 const express = require('express');
 const router = express.Router();
 const { query, get, run } = require('../db');
+const supabaseRepo = require('../supabase');
 const upload = require('../middleware/upload');
 const { broadcastEvent } = require('../events');
 
@@ -32,20 +33,31 @@ function getCurrentTimeFormatted() {
 router.get('/', async (req, res) => {
   try {
     const { status, phone } = req.query;
+
+    if (supabaseRepo.isSupabaseActive()) {
+      let list = await supabaseRepo.prescriptions.list();
+      if (phone) {
+        const cleanPhone = phone.replace(/[^0-9]/g, '');
+        list = list.filter(r => (r.phone || '').replace(/[^0-9]/g, '').includes(cleanPhone));
+      }
+      if (status && status !== 'all') {
+        list = list.filter(r => (r.status || '').toLowerCase() === status.toLowerCase());
+      }
+      return res.json({ success: true, total: list.length, data: list });
+    }
+
+    // SQLite fallback
     let sql = `SELECT * FROM prescriptions WHERE 1=1`;
     const params = [];
-
     if (phone) {
       const cleanPhone = phone.replace(/[^0-9]/g, '');
       sql += ` AND phone LIKE ?`;
       params.push(`%${cleanPhone}%`);
     }
-
     if (status && status !== 'all') {
       sql += ` AND LOWER(status) = LOWER(?)`;
       params.push(status);
     }
-
     sql += ` ORDER BY id DESC`;
 
     const rows = await query(sql, params);
@@ -54,11 +66,7 @@ router.get('/', async (req, res) => {
       bill: r.bill ? (typeof r.bill === 'string' ? JSON.parse(r.bill) : r.bill) : null
     }));
 
-    res.json({
-      success: true,
-      total: parsed.length,
-      data: parsed
-    });
+    res.json({ success: true, total: parsed.length, data: parsed });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -67,17 +75,15 @@ router.get('/', async (req, res) => {
 // GET /api/prescriptions/:id - Single prescription
 router.get('/:id', async (req, res) => {
   try {
-    const rx = await get(`SELECT * FROM prescriptions WHERE id = ?`, [req.params.id]);
-    if (!rx) {
-      return res.status(404).json({ success: false, error: 'Prescription not found' });
+    if (supabaseRepo.isSupabaseActive()) {
+      const rx = await supabaseRepo.prescriptions.getById(req.params.id);
+      if (!rx) return res.status(404).json({ success: false, error: 'Prescription not found' });
+      return res.json({ success: true, data: rx });
     }
-    res.json({
-      success: true,
-      data: {
-        ...rx,
-        bill: rx.bill ? JSON.parse(rx.bill) : null
-      }
-    });
+
+    const rx = await get(`SELECT * FROM prescriptions WHERE id = ?`, [req.params.id]);
+    if (!rx) return res.status(404).json({ success: false, error: 'Prescription not found' });
+    res.json({ success: true, data: { ...rx, bill: rx.bill ? JSON.parse(rx.bill) : null } });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -113,6 +119,20 @@ router.post('/', upload.single('prescription'), async (req, res) => {
     const date = 'Today';
     const notes = body.notes || '';
 
+    if (supabaseRepo.isSupabaseActive()) {
+      const created = await supabaseRepo.prescriptions.create({
+        patient: patientName, initials, phone, source, status: 'Pending',
+        color, time, date, fileName, fileUrl, notes
+      });
+      broadcastEvent('prescription_uploaded', created);
+      return res.status(201).json({
+        success: true,
+        message: 'Prescription saved in Supabase Cloud! Pharmacist notified.',
+        data: created
+      });
+    }
+
+    // SQLite fallback
     const insertResult = await run(`
       INSERT INTO prescriptions (patient, initials, phone, source, status, color, time, date, fileName, fileUrl, notes)
       VALUES (?, ?, ?, ?, 'Pending', ?, ?, ?, ?, ?, ?)
@@ -135,30 +155,120 @@ router.post('/', upload.single('prescription'), async (req, res) => {
 router.put('/:id/status', async (req, res) => {
   try {
     const { status } = req.body;
+
+    if (supabaseRepo.isSupabaseActive()) {
+      const updated = await supabaseRepo.prescriptions.updateStatus(req.params.id, status);
+      broadcastEvent('prescription_updated', updated);
+      return res.json({
+        success: true,
+        message: `Prescription status updated to ${status}`,
+        data: updated
+      });
+    }
+
     await run(`UPDATE prescriptions SET status = ? WHERE id = ?`, [status, req.params.id]);
     const updated = await get(`SELECT * FROM prescriptions WHERE id = ?`, [req.params.id]);
-
     broadcastEvent('prescription_updated', updated);
-
-    res.json({
-      success: true,
-      message: `Prescription status updated to ${status}`,
-      data: updated
-    });
+    res.json({ success: true, message: `Prescription status updated to ${status}`, data: updated });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// POST /api/prescriptions/:id/bill - Pharmacist prepares bill, deducts stock, increments sales!
+// POST /api/prescriptions/:id/bill - Pharmacist prepares bill, deducts stock, creates order
 router.post('/:id/bill', async (req, res) => {
   try {
     const { billRows, createOrder } = req.body;
-    const rx = await get(`SELECT * FROM prescriptions WHERE id = ?`, [req.params.id]);
-    if (!rx) {
-      return res.status(404).json({ success: false, error: 'Prescription not found' });
+
+    if (supabaseRepo.isSupabaseActive()) {
+      const rx = await supabaseRepo.prescriptions.getById(req.params.id);
+      if (!rx) return res.status(404).json({ success: false, error: 'Prescription not found' });
+      if (!billRows || !billRows.length) {
+        return res.status(400).json({ success: false, error: 'Bill must contain at least one item' });
+      }
+
+      let subtotal = 0;
+      const items = [];
+
+      for (const row of billRows) {
+        const med = await supabaseRepo.medicines.getById(row.medicineId);
+        const unitPrice = row.unitPrice || (med ? Number(med.price) : 0);
+        const qty = row.qty || 1;
+        const rowTotal = unitPrice * qty;
+        subtotal += rowTotal;
+
+        if (med) {
+          const updatedMed = await supabaseRepo.medicines.decrementStockAndIncrementSales(med.id, qty);
+          if (updatedMed) broadcastEvent('medicine_updated', updatedMed);
+        }
+
+        items.push({
+          id: row.medicineId,
+          name: med ? med.name : 'Prescription Medicine',
+          brand: med ? med.brand : '',
+          packUnit: med ? (med.packUnit || med.packunit) : 'strip',
+          price: unitPrice, qty, total: rowTotal
+        });
+      }
+
+      const deliveryFee = subtotal >= 499 ? 0 : 30;
+      const grandTotal = subtotal + deliveryFee;
+      const bill = { items, subtotal, deliveryFee, grandTotal, preparedAt: new Date().toISOString() };
+
+      let orderId = null;
+
+      if (createOrder) {
+        const allOrders = await supabaseRepo.orders.list();
+        const nums = allOrders.map(o => parseInt((o.id || '').replace('KP-', ''))).filter(n => !isNaN(n));
+        const nextNum = nums.length ? Math.max(...nums) + 1 : 2850;
+        orderId = `KP-${nextNum}`;
+
+        const rider = { name: 'Rahul Kurmi', initials: 'RK', phone: '+919876543210', distance: '2.0 km', eta: '~20 mins' };
+        const stages = [
+          { id: 'confirmed', label: 'Order Confirmed (Rx Verified)', time: getCurrentTimeFormatted(), status: 'done', icon: '✅' },
+          { id: 'preparing', label: 'Medicines Packed', time: 'In Progress', status: 'active', icon: '💊' },
+          { id: 'delivery', label: 'Out for Delivery', time: 'Pending', status: 'pending', icon: '🛵' },
+          { id: 'delivered', label: 'Delivered', time: 'Pending', status: 'pending', icon: '📦' }
+        ];
+
+        const orderPayload = {
+          id: orderId,
+          customerName: rx.patient,
+          phone: rx.phone,
+          date: 'Today',
+          placed: getCurrentTimeFormatted(),
+          status: 'preparing',
+          paymentMethod: 'Cash on Delivery',
+          paymentStatus: 'Pending on Delivery',
+          deliveryAddress: 'Gondia store customer',
+          items,
+          subtotal,
+          deliveryFee,
+          total: grandTotal,
+          prescriptionId: rx.id,
+          notes: `Rx #${rx.id} — ${rx.notes || ''}`.trim(),
+          rider,
+          stages,
+          estimatedDelivery: 'Within 45 mins'
+        };
+
+        const createdOrder = await supabaseRepo.orders.create(orderPayload);
+        broadcastEvent('new_order', createdOrder);
+      }
+
+      const updatedRx = await supabaseRepo.prescriptions.saveBill(rx.id, bill, orderId);
+      broadcastEvent('prescription_updated', { ...updatedRx, bill });
+
+      return res.json({
+        success: true,
+        message: 'Prescription bill created in Supabase! Stock deducted & sales updated.',
+        data: { prescription: { ...updatedRx, bill }, orderId }
+      });
     }
 
+    // SQLite fallback
+    const rx = await get(`SELECT * FROM prescriptions WHERE id = ?`, [req.params.id]);
+    if (!rx) return res.status(404).json({ success: false, error: 'Prescription not found' });
     if (!billRows || !billRows.length) {
       return res.status(400).json({ success: false, error: 'Bill must contain at least one item' });
     }
@@ -173,16 +283,14 @@ router.post('/:id/bill', async (req, res) => {
       const rowTotal = unitPrice * qty;
       subtotal += rowTotal;
 
-      // Update medicine stock and sales count in SQLite!
       if (med) {
         await run(`
-          UPDATE medicines 
-          SET stock = MAX(0, stock - ?), 
+          UPDATE medicines
+          SET stock = MAX(0, stock - ?),
               sold = sold + ?,
               updatedAt = CURRENT_TIMESTAMP
           WHERE id = ?
         `, [qty, qty, med.id]);
-
         const updatedMed = await get(`SELECT * FROM medicines WHERE id = ?`, [med.id]);
         broadcastEvent('medicine_updated', updatedMed);
       }
@@ -192,41 +300,23 @@ router.post('/:id/bill', async (req, res) => {
         name: med ? med.name : 'Prescription Medicine',
         brand: med ? med.brand : '',
         packUnit: med ? med.packUnit : 'strip',
-        price: unitPrice,
-        qty: qty,
-        total: rowTotal
+        price: unitPrice, qty, total: rowTotal
       });
     }
 
     const deliveryFee = subtotal >= 499 ? 0 : 30;
     const grandTotal = subtotal + deliveryFee;
-
-    const bill = {
-      items,
-      subtotal,
-      deliveryFee,
-      grandTotal,
-      preparedAt: new Date().toISOString()
-    };
+    const bill = { items, subtotal, deliveryFee, grandTotal, preparedAt: new Date().toISOString() };
 
     let orderId = null;
 
     if (createOrder) {
       const allOrders = await query(`SELECT id FROM orders`);
-      const nums = allOrders
-        .map(o => parseInt((o.id || '').replace('KP-', '')))
-        .filter(n => !isNaN(n));
+      const nums = allOrders.map(o => parseInt((o.id || '').replace('KP-', ''))).filter(n => !isNaN(n));
       const nextNum = nums.length ? Math.max(...nums) + 1 : 2850;
       orderId = `KP-${nextNum}`;
 
-      const rider = {
-        name: 'Rahul Kurmi',
-        initials: 'RK',
-        phone: '+919876543210',
-        distance: '2.0 km',
-        eta: '~20 mins'
-      };
-
+      const rider = { name: 'Rahul Kurmi', initials: 'RK', phone: '+919876543210', distance: '2.0 km', eta: '~20 mins' };
       const stages = [
         { id: 'confirmed', label: 'Order Confirmed (Rx Verified)', time: getCurrentTimeFormatted(), status: 'done', icon: '✅' },
         { id: 'preparing', label: 'Medicines Packed', time: 'In Progress', status: 'active', icon: '💊' },
@@ -238,53 +328,27 @@ router.post('/:id/bill', async (req, res) => {
         INSERT INTO orders (id, customerName, phone, date, placed, status, paymentMethod, paymentStatus, deliveryAddress, items, subtotal, deliveryFee, total, prescriptionId, rider, stages, estimatedDelivery)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
-        orderId,
-        rx.patient,
-        rx.phone,
-        'Today',
-        getCurrentTimeFormatted(),
-        'preparing',
-        'Cash on Delivery',
-        'Pending on Delivery',
-        'Gondia store customer',
-        JSON.stringify(items),
-        subtotal,
-        deliveryFee,
-        grandTotal,
-        rx.id,
-        JSON.stringify(rider),
-        JSON.stringify(stages),
-        'Within 45 mins'
+        orderId, rx.patient, rx.phone, 'Today', getCurrentTimeFormatted(), 'preparing',
+        'Cash on Delivery', 'Pending on Delivery', 'Gondia store customer',
+        JSON.stringify(items), subtotal, deliveryFee, grandTotal, rx.id,
+        JSON.stringify(rider), JSON.stringify(stages), 'Within 45 mins'
       ]);
 
       const createdOrder = await get(`SELECT * FROM orders WHERE id = ?`, [orderId]);
-      broadcastEvent('new_order', {
-        ...createdOrder,
-        items,
-        rider,
-        stages
-      });
+      broadcastEvent('new_order', { ...createdOrder, items, rider, stages });
     }
 
     await run(`
-      UPDATE prescriptions 
-      SET status = 'Completed', bill = ?, orderId = ?
-      WHERE id = ?
+      UPDATE prescriptions SET status = 'Completed', bill = ?, orderId = ? WHERE id = ?
     `, [JSON.stringify(bill), orderId, rx.id]);
 
     const updatedRx = await get(`SELECT * FROM prescriptions WHERE id = ?`, [rx.id]);
-    broadcastEvent('prescription_updated', {
-      ...updatedRx,
-      bill
-    });
+    broadcastEvent('prescription_updated', { ...updatedRx, bill });
 
     res.json({
       success: true,
       message: 'Prescription bill created! Stock deducted & sales updated.',
-      data: {
-        prescription: { ...updatedRx, bill },
-        orderId
-      }
+      data: { prescription: { ...updatedRx, bill }, orderId }
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

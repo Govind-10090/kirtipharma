@@ -338,6 +338,34 @@ body::before {
           <button onclick="addBillRow()" class="btn btn-secondary btn-sm">+ Add Row</button>
         </div>
 
+        <!-- PRESCRIPTION PREVIEW PANEL -->
+        <div id="rx-preview-panel" style="display:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
+            <div style="flex:1;min-width:200px">
+              <div style="font-size:0.75rem;text-transform:uppercase;color:var(--text-muted);font-weight:700;letter-spacing:0.5px">Customer / Patient</div>
+              <div id="rx-prev-patient" style="font-size:1.05rem;font-weight:700;color:var(--text-dark);margin-top:2px">—</div>
+              <div id="rx-prev-phone" style="font-size:0.85rem;color:var(--text-muted);margin-top:2px">📞 —</div>
+              <div id="rx-prev-notes" style="font-size:0.85rem;color:#4B5563;margin-top:6px;font-style:italic"></div>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center">
+              <a id="rx-prev-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-secondary" style="font-size:0.78rem">
+                🔍 Open Full Prescription
+              </a>
+              <a id="rx-prev-fulllink" href="#" target="_blank" rel="noopener noreferrer" style="display:none"></a>
+            </div>
+          </div>
+          <div style="margin-top:12px;border-top:1px solid #e2e8f0;padding-top:12px">
+            <img id="rx-prev-img" src="" alt="Uploaded Prescription" style="max-height:220px;max-width:100%;object-fit:contain;border-radius:8px;border:1px solid #cbd5e1;display:none;background:#ffffff">
+            <div id="rx-prev-pdf" style="display:none;align-items:center;gap:8px;padding:12px;background:#ffffff;border-radius:8px;border:1px solid #cbd5e1">
+              <span style="font-size:1.8rem">📄</span>
+              <div>
+                <div style="font-weight:600;font-size:0.9rem">PDF Prescription Document</div>
+                <div style="font-size:0.78rem;color:var(--text-muted)">Click "Open Full Prescription" above to read or download.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Bill table -->
         <div class="table-scroll-wrap" style="margin-bottom:16px">
           <table class="bill-builder-table" role="table" aria-label="Bill builder">

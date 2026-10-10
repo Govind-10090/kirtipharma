@@ -226,18 +226,31 @@ function renderPrescriptionList() {
 function renderPrescriptionCard(p) {
   const sourceBadgeClass = p.source === 'WhatsApp' ? 'badge-green' : 'badge-blue';
   const statusClass = p.status === 'Pending' ? 'status-pending' : 'status-review';
+  const fileUrl = p.fileUrl || p.fileurl || '';
+  const fileName = p.fileName || p.filename || '';
+  const isImage = /\.(jpg|jpeg|png|webp)$/i.test(fileName) || (fileUrl && !fileName.toLowerCase().endsWith('.pdf') && !fileUrl.startsWith('data:application'));
   return `
     <div class="prescription-card" id="rx-card-${p.id}" onclick="openBillBuilder(${p.id})">
       <div class="patient-avatar" style="background:${p.color || '#7C3AED'}">${p.initials || 'PT'}</div>
-      <div class="prescription-info">
+      <div class="prescription-info" style="flex:1;min-width:0">
         <div class="patient-name">${p.patient}</div>
         <div class="prescription-meta">
-          <span>${p.time || ''}</span>
+          <span style="font-size:0.75rem;color:var(--text-muted)">📞 ${p.phone || 'N/A'}</span>
           <span class="badge ${sourceBadgeClass}" style="font-size:0.65rem">${p.source}</span>
           <span class="status-badge ${statusClass}">${p.status}</span>
         </div>
+        <div class="prescription-meta" style="margin-top:3px;gap:8px">
+          <span style="font-size:0.73rem;color:var(--text-muted)">🕐 ${p.time || ''}</span>
+          ${p.notes ? `<span style="font-size:0.72rem;color:var(--text-muted);font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px" title="${p.notes}">📝 ${p.notes}</span>` : ''}
+        </div>
       </div>
-      <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();openBillBuilder(${p.id})" style="flex-shrink:0">Review & Bill →</button>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0">
+        ${fileUrl ? `
+          ${isImage ? `<img src="${fileUrl}" alt="Rx" style="width:48px;height:48px;object-fit:cover;border-radius:8px;border:1px solid var(--border);flex-shrink:0" onerror="this.style.display='none'">` : `<span style="font-size:1.5rem" title="${fileName}">📄</span>`}
+          <a href="${fileUrl}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="btn btn-sm btn-secondary" style="font-size:0.7rem;padding:3px 8px">👁 View Rx</a>
+        ` : ''}
+        <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();openBillBuilder(${p.id})" style="flex-shrink:0">Review &amp; Bill →</button>
+      </div>
     </div>
   `;
 }
@@ -555,6 +568,36 @@ function renderBillBuilder(prescription) {
 
   if (headerEl) headerEl.textContent = prescription.patient;
 
+  // ─── Prescription preview panel ────────────────────────────────────────────
+  const previewPanel  = document.getElementById('rx-preview-panel');
+  if (previewPanel) {
+    const fileUrl  = prescription.fileUrl  || prescription.fileurl  || '';
+    const fileName = prescription.fileName || prescription.filename || '';
+    const isPdf    = fileName.toLowerCase().endsWith('.pdf');
+    const isImage  = !isPdf && fileUrl;
+
+    document.getElementById('rx-prev-patient').textContent = prescription.patient + ' — ' + (prescription.source || 'App');
+    document.getElementById('rx-prev-phone').textContent   = '📞 ' + (prescription.phone || 'N/A');
+    const notesEl = document.getElementById('rx-prev-notes');
+    if (notesEl) notesEl.textContent = prescription.notes ? ('📝 ' + prescription.notes) : '';
+
+    const imgEl     = document.getElementById('rx-prev-img');
+    const pdfEl     = document.getElementById('rx-prev-pdf');
+    const linkEl    = document.getElementById('rx-prev-link');
+    const fullLink  = document.getElementById('rx-prev-fulllink');
+
+    if (fileUrl) {
+      if (linkEl)   linkEl.href   = fileUrl;
+      if (fullLink) fullLink.href = fileUrl;
+      if (imgEl) { imgEl.src = fileUrl; imgEl.style.display = isImage ? 'block' : 'none'; }
+      if (pdfEl)  pdfEl.style.display = isPdf ? 'flex' : 'none';
+      previewPanel.style.display = 'block';
+    } else {
+      previewPanel.style.display = 'none';
+    }
+  }
+  // ───────────────────────────────────────────────────────────────────────────
+
   const grandTotal = billRows.reduce((sum, row) => sum + row.qty * row.unitPrice, 0);
   if (grandTotalEl) grandTotalEl.textContent = `₹${grandTotal.toFixed(0)}`;
 
@@ -591,6 +634,7 @@ function renderBillBuilder(prescription) {
     `;
   }).join('');
 }
+
 
 function addBillRow() {
   const firstAvailable = MEDICINES.find(m => m.stock > 0);

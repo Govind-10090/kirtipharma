@@ -505,9 +505,17 @@ async function initDatabase() {
         email TEXT,
         role TEXT DEFAULT 'customer',
         addresses TEXT,
+        password_hash TEXT,
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Ensure password_hash column exists on legacy SQLite databases
+    try {
+      await run(`ALTER TABLE users ADD COLUMN password_hash TEXT`);
+    } catch (e) {
+      // Column already exists
+    }
   }
 
   // Seed medicines if empty

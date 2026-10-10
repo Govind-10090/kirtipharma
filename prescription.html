@@ -180,36 +180,90 @@ body::before {
           <input type="file" id="prescription-file" accept="image/jpeg,image/png,image/webp,application/pdf" style="display:none" aria-label="Select prescription file">
 
           <!-- Preview -->
-          <div id="upload-preview-section" style="display:none;align-items:center;gap:12px;margin-top:16px">
-            <img id="preview-thumb" src="" alt="Prescription preview" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border);display:none">
+          <div id="upload-preview-section" style="display:none;align-items:center;gap:12px;margin-top:16px;padding:12px;background:#f8fafc;border-radius:10px;border:1px solid var(--border)">
+            <img id="preview-thumb" src="" alt="Prescription preview" style="width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid var(--border);display:none">
             <div class="upload-preview" style="flex:1">
               <span class="upload-preview-icon">📄</span>
-              <span class="upload-preview-name" id="preview-file-name">prescription.jpg</span>
-              <span class="upload-check">✅</span>
+              <span class="upload-preview-name" id="preview-file-name" style="font-weight:600">prescription.jpg</span>
+              <span class="upload-check" style="color:var(--green-primary)">✓ Ready</span>
             </div>
-          </div>
-
-          <!-- Success message -->
-          <div id="upload-success-msg" style="display:none;align-items:center;gap:12px;background:#D1FAE5;border:1px solid #A7F3D0;border-radius:12px;padding:16px;margin-top:16px">
-            <span style="font-size:1.5rem">✅</span>
-            <div>
-              <div style="font-weight:700;color:#065F46;margin-bottom:2px">Prescription received!</div>
-              <div style="font-size:0.82rem;color:#047857">Our pharmacist will call you within 30 minutes to confirm your order.</div>
-            </div>
+            <button type="button" onclick="clearSelectedFile()" style="background:none;border:none;cursor:pointer;color:#DC2626;font-size:0.8rem;font-weight:600">✕ Remove</button>
           </div>
 
           <!-- Camera Button -->
-          <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
+          <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
             <button class="btn btn-secondary w-full" id="camera-btn" aria-label="Capture prescription via camera">
               📸 Capture via Camera
             </button>
             <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none" aria-label="Camera capture">
           </div>
 
+          <!-- PATIENT & CONTACT DETAILS FORM -->
+          <div id="patient-details-form" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+            <div style="font-weight:700;font-size:0.95rem;margin-bottom:12px;color:var(--text-dark);display:flex;align-items:center;gap:6px">
+              <span>👤</span> Patient &amp; Contact Details
+            </div>
+            
+            <div style="margin-bottom:12px">
+              <label for="patient-name-input" style="display:block;font-size:0.82rem;font-weight:600;color:var(--text-dark);margin-bottom:4px">
+                Patient / Customer Name <span style="color:#DC2626">*</span>
+              </label>
+              <input
+                type="text"
+                id="patient-name-input"
+                class="form-input"
+                placeholder="e.g. Ramesh Sharma"
+                required
+                style="width:100%"
+              >
+            </div>
+
+            <div style="margin-bottom:12px">
+              <label for="patient-phone-input" style="display:block;font-size:0.82rem;font-weight:600;color:var(--text-dark);margin-bottom:4px">
+                Mobile Number (for Pharmacist Call &amp; Bill) <span style="color:#DC2626">*</span>
+              </label>
+              <input
+                type="tel"
+                id="patient-phone-input"
+                class="form-input"
+                placeholder="e.g. 9876543210"
+                maxlength="10"
+                required
+                style="width:100%"
+              >
+            </div>
+
+            <div style="margin-bottom:16px">
+              <label for="patient-notes-input" style="display:block;font-size:0.82rem;font-weight:600;color:var(--text-dark);margin-bottom:4px">
+                Delivery Address or Notes for Pharmacist (Optional)
+              </label>
+              <textarea
+                id="patient-notes-input"
+                class="form-input"
+                rows="2"
+                placeholder="e.g. Civil Lines, Gondia. Need 1 month supply."
+                style="width:100%;resize:vertical"
+              ></textarea>
+            </div>
+
+            <button type="button" class="btn btn-primary w-full" id="submit-rx-btn" style="padding:14px;font-size:0.95rem;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px">
+              <span>📋</span> Submit Prescription to Chemist
+            </button>
+          </div>
+
+          <!-- Success message -->
+          <div id="upload-success-msg" style="display:none;align-items:center;gap:12px;background:#D1FAE5;border:1px solid #A7F3D0;border-radius:12px;padding:16px;margin-top:16px">
+            <span style="font-size:1.6rem">✅</span>
+            <div style="flex:1">
+              <div style="font-weight:700;color:#065F46;margin-bottom:2px" id="success-patient-header">Prescription received!</div>
+              <div style="font-size:0.84rem;color:#047857" id="success-patient-detail">Our chemist has received your file and will prepare your bill.</div>
+            </div>
+          </div>
+
           <!-- Reupload link -->
-          <div id="reupload-section" style="margin-top:12px;text-align:center">
+          <div id="reupload-section" style="margin-top:12px;text-align:center;display:none">
             <button onclick="reuploadPrescription()" style="font-size:0.8rem;color:var(--green-primary);font-weight:600;background:none;border:none;cursor:pointer;text-decoration:underline">
-              Upload a different prescription
+              Upload another prescription
             </button>
           </div>
         </div>

@@ -25,6 +25,35 @@ const CAT_IMAGES = {
   'Diabetes': 'images/med_chronic.png'
 };
 
+function formatPrescription(rx) {
+  if (!rx) return null;
+  return {
+    ...rx,
+    // PostgreSQL lowercases unquoted column names — normalise back to camelCase
+    fileName: rx.fileName ?? rx.filename ?? null,
+    fileUrl: rx.fileUrl ?? rx.fileurl ?? null,
+    orderId: rx.orderId ?? rx.orderid ?? null,
+    bill: rx.bill ?? null
+  };
+}
+
+function formatOrder(o) {
+  if (!o) return null;
+  return {
+    ...o,
+    customerName: o.customerName ?? o.customername ?? 'Customer',
+    paymentMethod: o.paymentMethod ?? o.paymentmethod ?? 'Cash on Delivery',
+    paymentStatus: o.paymentStatus ?? o.paymentstatus ?? 'Pending',
+    deliveryAddress: o.deliveryAddress ?? o.deliveryaddress ?? '',
+    deliveryFee: Number(o.deliveryFee ?? o.deliveryfee ?? 0),
+    prescriptionId: o.prescriptionId ?? o.prescriptionid ?? null,
+    estimatedDelivery: o.estimatedDelivery ?? o.estimateddelivery ?? 'Within 45 mins',
+    items: typeof o.items === 'string' ? JSON.parse(o.items) : (o.items || []),
+    rider: typeof o.rider === 'string' ? JSON.parse(o.rider) : (o.rider || {}),
+    stages: typeof o.stages === 'string' ? JSON.parse(o.stages) : (o.stages || [])
+  };
+}
+
 function formatMedicine(m) {
   if (!m) return null;
   const cat = m.category || 'General';
@@ -235,19 +264,43 @@ const orders = {
 
     const { data, error } = await query;
     if (error) throw error;
-    return data || [];
+    return (data || []).map(formatOrder);
   },
 
   async getById(id) {
     const { data, error } = await supabase.from('orders').select('*').eq('id', id).single();
     if (error) return null;
-    return data;
+    return formatOrder(data);
   },
 
   async create(orderData) {
-    const { data, error } = await supabase.from('orders').insert(orderData).select().single();
-    if (error) throw error;
-    return data;
+    const row = {
+      id: orderData.id,
+      customername: orderData.customerName || orderData.customername || 'Customer',
+      phone: orderData.phone,
+      date: orderData.date || 'Today',
+      placed: orderData.placed,
+      status: orderData.status || 'confirmed',
+      paymentmethod: orderData.paymentMethod || orderData.paymentmethod || 'Cash on Delivery',
+      paymentstatus: orderData.paymentStatus || orderData.paymentstatus || 'Pending',
+      deliveryaddress: orderData.deliveryAddress || orderData.deliveryaddress || '',
+      items: orderData.items,
+      subtotal: parseFloat(orderData.subtotal) || 0,
+      deliveryfee: parseFloat(orderData.deliveryFee ?? orderData.deliveryfee) || 0,
+      total: parseFloat(orderData.total) || 0,
+      prescriptionid: orderData.prescriptionId ? parseInt(orderData.prescriptionId) : null,
+      notes: orderData.notes || '',
+      rider: orderData.rider || null,
+      stages: orderData.stages || null,
+      estimateddelivery: orderData.estimatedDelivery || orderData.estimateddelivery || 'Within 45 mins'
+    };
+    const { data, error } = await supabase.from('orders').insert(row).select().single();
+    if (error) {
+      const fallback = await supabase.from('orders').insert(orderData).select().single();
+      if (fallback.error) throw error;
+      return formatOrder(fallback.data);
+    }
+    return formatOrder(data);
   },
 
   async updateStatus(id, newStatus) {
@@ -258,7 +311,7 @@ const orders = {
       .select()
       .single();
     if (error) throw error;
-    return data;
+    return formatOrder(data);
   }
 };
 
@@ -270,19 +323,38 @@ const prescriptions = {
       .select('*')
       .order('created_at', { ascending: false });
     if (error) throw error;
-    return data || [];
+    return (data || []).map(formatPrescription);
   },
 
   async getById(id) {
     const { data, error } = await supabase.from('prescriptions').select('*').eq('id', id).single();
     if (error) return null;
-    return data;
+    return formatPrescription(data);
   },
 
   async create(rxData) {
-    const { data, error } = await supabase.from('prescriptions').insert(rxData).select().single();
-    if (error) throw error;
-    return data;
+    const payload = {
+      patient: rxData.patient,
+      initials: rxData.initials,
+      phone: rxData.phone,
+      source: rxData.source || 'App',
+      status: rxData.status || 'Pending',
+      color: rxData.color,
+      time: rxData.time,
+      date: rxData.date || 'Today',
+      filename: rxData.fileName || rxData.filename,
+      fileurl: rxData.fileUrl || rxData.fileurl,
+      notes: rxData.notes || '',
+      bill: rxData.bill || null,
+      orderid: rxData.orderId || rxData.orderid || null
+    };
+    const { data, error } = await supabase.from('prescriptions').insert(payload).select().single();
+    if (error) {
+      const fallback = await supabase.from('prescriptions').insert(rxData).select().single();
+      if (fallback.error) throw error;
+      return formatPrescription(fallback.data);
+    }
+    return formatPrescription(data);
   },
 
   async updateStatus(id, newStatus) {
@@ -293,7 +365,7 @@ const prescriptions = {
       .select()
       .single();
     if (error) throw error;
-    return data;
+    return formatPrescription(data);
   },
 
   async saveBill(id, bill, orderId) {
@@ -301,14 +373,14 @@ const prescriptions = {
       .from('prescriptions')
       .update({
         bill,
-        orderId,
+        orderid: orderId,   // PostgreSQL stores orderId as orderid
         status: 'Completed'
       })
       .eq('id', id)
       .select()
       .single();
     if (error) throw error;
-    return data;
+    return formatPrescription(data);
   }
 };
 

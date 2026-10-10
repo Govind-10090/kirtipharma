@@ -14,7 +14,7 @@ const SALT_ROUNDS  = 10;
 // POST /api/auth/login — Login (password check) OR Register (new user with hashed password)
 router.post('/login', async (req, res) => {
   try {
-    const { phone, password, name } = req.body;
+    const { phone, password, name, action } = req.body;
 
     if (!phone || !/^\d{10}$/.test(phone.trim())) {
       return res.status(400).json({ success: false, error: 'Please provide a valid 10-digit mobile number' });
@@ -37,8 +37,37 @@ router.post('/login', async (req, res) => {
     if (user) {
       // ── EXISTING USER: verify password ──────────────────────────────
       if (user.password_hash) {
-        const match = await bcrypt.compare(password.trim(), user.password_hash);
+        let match = false;
+        const isBcrypt = typeof user.password_hash === 'string' && (
+          user.password_hash.startsWith('$2a$') ||
+          user.password_hash.startsWith('$2b$') ||
+          user.password_hash.startsWith('$2y$')
+        );
+
+        if (isBcrypt) {
+          match = await bcrypt.compare(password.trim(), user.password_hash);
+        } else {
+          // Plaintext fallback (e.g. legacy/seed data like '1234')
+          match = (user.password_hash === password.trim());
+          if (match) {
+            // Automatically upgrade legacy plaintext password to bcrypt hash
+            const upgradedHash = await bcrypt.hash(password.trim(), SALT_ROUNDS);
+            if (supabaseRepo.isSupabaseActive()) {
+              await supabaseRepo.users.update(user.id, { password_hash: upgradedHash });
+            } else {
+              await run(`UPDATE users SET password_hash = ? WHERE id = ?`, [upgradedHash, user.id]);
+            }
+            console.log(`[AUTH] Upgraded legacy plaintext password to bcrypt hash for user: ${user.phone}`);
+          }
+        }
+
         if (!match) {
+          if (action === 'register') {
+            return res.status(409).json({
+              success: false,
+              error: 'An account with this mobile number already exists. Please switch to Login.'
+            });
+          }
           return res.status(401).json({ success: false, error: 'Incorrect password. Please try again.' });
         }
       } else {

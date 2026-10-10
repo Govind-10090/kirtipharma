@@ -1,19 +1,40 @@
 // ===== KIRTI PHARMA — prescription.js =====
-// Drag-drop upload, camera capture, WhatsApp redirect
+// Drag-drop upload, camera capture, patient details & chemist queue submission
+
+let selectedRxFile = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   initDropzone();
   initCamera();
+  initPatientForm();
 });
+
+// ===== PREFILL PATIENT DETAILS =====
+function initPatientForm() {
+  const nameInput = document.getElementById('patient-name-input');
+  const phoneInput = document.getElementById('patient-phone-input');
+  const submitBtn = document.getElementById('submit-rx-btn');
+
+  // Auto-fill if user has an active session or past info
+  const savedName = localStorage.getItem('kp_user_name');
+  const savedPhone = localStorage.getItem('kp_user_phone');
+
+  if (nameInput && savedName && savedName !== 'Customer') {
+    nameInput.value = savedName;
+  }
+  if (phoneInput && savedPhone) {
+    phoneInput.value = savedPhone.replace(/[^0-9]/g, '').slice(-10);
+  }
+
+  if (submitBtn) {
+    submitBtn.addEventListener('click', handlePrescriptionSubmission);
+  }
+}
 
 // ===== DROPZONE =====
 function initDropzone() {
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('prescription-file');
-  const previewSection = document.getElementById('upload-preview-section');
-  const previewName = document.getElementById('preview-file-name');
-  const previewThumb = document.getElementById('preview-thumb');
-  const successMsg = document.getElementById('upload-success-msg');
 
   if (!dropzone || !fileInput) return;
 
@@ -48,84 +69,168 @@ function initDropzone() {
     e.preventDefault();
     dropzone.classList.remove('drag-over');
     const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
+    if (file) stageFile(file);
   });
 
   // File input change
   fileInput.addEventListener('change', () => {
-    if (fileInput.files[0]) handleFile(fileInput.files[0]);
+    if (fileInput.files[0]) stageFile(fileInput.files[0]);
   });
+}
 
-  function handleFile(file) {
-    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-    if (!allowed.includes(file.type)) {
-      showToast('Please upload a JPG, PNG, or PDF file', 'error');
-      return;
+function stageFile(file) {
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+  if (!allowed.includes(file.type)) {
+    showToast('Please upload a JPG, PNG, or PDF file', 'error');
+    return;
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    showToast('File too large. Maximum size is 10MB', 'error');
+    return;
+  }
+
+  selectedRxFile = file;
+
+  const dropzone = document.getElementById('dropzone');
+  const previewSection = document.getElementById('upload-preview-section');
+  const previewName = document.getElementById('preview-file-name');
+  const previewThumb = document.getElementById('preview-thumb');
+
+  // Show preview
+  if (previewSection) previewSection.style.display = 'flex';
+  if (previewName) previewName.textContent = file.name;
+
+  if (previewThumb && file.type.startsWith('image/')) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      previewThumb.src = e.target.result;
+      previewThumb.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+  } else if (previewThumb) {
+    previewThumb.style.display = 'none';
+  }
+
+  // Update dropzone UI
+  if (dropzone) {
+    const icon = dropzone.querySelector('.dropzone-icon');
+    const title = dropzone.querySelector('.dropzone-title');
+    if (icon) icon.textContent = '📎';
+    if (title) title.textContent = `Attached: ${file.name}`;
+  }
+
+  showToast(`Prescription "${file.name}" attached! Please check patient details below.`, 'info');
+}
+
+function clearSelectedFile() {
+  selectedRxFile = null;
+  const fileInput = document.getElementById('prescription-file');
+  if (fileInput) fileInput.value = '';
+
+  const previewSection = document.getElementById('upload-preview-section');
+  if (previewSection) previewSection.style.display = 'none';
+
+  const dropzone = document.getElementById('dropzone');
+  if (dropzone) {
+    const icon = dropzone.querySelector('.dropzone-icon');
+    const title = dropzone.querySelector('.dropzone-title');
+    if (icon) icon.textContent = '📄';
+    if (title) title.textContent = 'Drop your prescription here';
+  }
+}
+
+// ===== SUBMIT PRESCRIPTION =====
+async function handlePrescriptionSubmission() {
+  if (!selectedRxFile) {
+    const dropzone = document.getElementById('dropzone');
+    if (dropzone) {
+      dropzone.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      dropzone.style.border = '2px dashed #DC2626';
+      setTimeout(() => { dropzone.style.border = ''; }, 2500);
     }
-    if (file.size > 10 * 1024 * 1024) {
-      showToast('File too large. Maximum size is 10MB', 'error');
-      return;
-    }
+    showToast('Please select or capture your prescription file first', 'error');
+    return;
+  }
 
-    // Show preview
-    if (previewSection) previewSection.style.display = 'flex';
-    if (previewName) previewName.textContent = file.name;
+  const nameInput = document.getElementById('patient-name-input');
+  const phoneInput = document.getElementById('patient-phone-input');
+  const notesInput = document.getElementById('patient-notes-input');
+  const submitBtn = document.getElementById('submit-rx-btn');
 
-    if (previewThumb && file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        previewThumb.src = e.target.result;
-        previewThumb.style.display = 'block';
-      };
-      reader.readAsDataURL(file);
-    } else if (previewThumb) {
-      previewThumb.style.display = 'none';
-    }
+  const patientName = (nameInput?.value || '').trim();
+  const rawPhone = (phoneInput?.value || '').replace(/[^0-9]/g, '').trim();
+  const notes = (notesInput?.value || '').trim();
 
-    // Update dropzone
-    dropzone.querySelector('.dropzone-icon').textContent = '✅';
-    dropzone.querySelector('.dropzone-title').textContent = 'Prescription uploaded!';
+  if (!patientName || patientName.length < 2) {
+    nameInput?.focus();
+    showToast('Please enter the patient / customer name', 'error');
+    return;
+  }
 
-    // Send file to Backend API
-    const formData = new FormData();
-    formData.append('prescription', file);
-    formData.append('patient', localStorage.getItem('kp_user_name') || 'Kirti Customer');
-    formData.append('phone', localStorage.getItem('kp_user_phone') || '9876543210');
-    formData.append('source', 'App');
+  if (!rawPhone || rawPhone.length !== 10) {
+    phoneInput?.focus();
+    showToast('Please enter a valid 10-digit mobile number', 'error');
+    return;
+  }
 
-    fetch('/api/prescriptions', {
+  // Remember contact details for subsequent visits
+  localStorage.setItem('kp_user_name', patientName);
+  localStorage.setItem('kp_user_phone', rawPhone);
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span>⏳</span> Sending to Chemist Queue...';
+  }
+
+  const formData = new FormData();
+  formData.append('prescription', selectedRxFile);
+  formData.append('patient', patientName);
+  formData.append('phone', rawPhone);
+  formData.append('notes', notes);
+  formData.append('source', 'App');
+
+  try {
+    const res = await fetch('/api/prescriptions', {
       method: 'POST',
       body: formData
-    })
-    .then(r => r.json())
-    .then(data => {
-      console.log('[KP] Prescription stored on server:', data);
-    })
-    .catch(err => {
-      console.warn('Backend upload failed, stored in local preview:', err);
     });
+    const result = await res.json();
 
-    // Show success message
-    if (successMsg) {
-      successMsg.innerHTML = `
-        <span style="font-size:1.5rem">✅</span>
-        <div style="flex:1">
-          <div style="font-weight:700;color:#065F46;margin-bottom:2px">Prescription received!</div>
-          <div style="font-size:0.82rem;color:#047857">Our pharmacist will verify and prepare your bill within 30 minutes.</div>
-        </div>
-      `;
-      successMsg.style.display = 'flex';
-      successMsg.style.opacity = '0';
-      setTimeout(() => {
-        successMsg.style.transition = 'opacity 0.5s ease';
-        successMsg.style.opacity = '1';
-      }, 50);
+    if (!res.ok || !result.success) {
+      throw new Error(result.error || 'Server error uploading prescription');
     }
 
-    showToast('Prescription uploaded successfully to Kirti Pharma! 📋', 'success');
+    // Success UI
+    const successMsg = document.getElementById('upload-success-msg');
+    const headerEl = document.getElementById('success-patient-header');
+    const detailEl = document.getElementById('success-patient-detail');
+    const formSection = document.getElementById('patient-details-form');
+    const dropzone = document.getElementById('dropzone');
+    const previewSection = document.getElementById('upload-preview-section');
+    const reuploadSection = document.getElementById('reupload-section');
 
-    // Track upload
-    logUploadEvent(file.name);
+    if (headerEl) headerEl.textContent = `Prescription received for ${patientName}!`;
+    if (detailEl) detailEl.textContent = `Our pharmacist at Kirti Medical Store has received this and will call you on ${rawPhone} with availability & pricing.`;
+
+    if (successMsg) {
+      successMsg.style.display = 'flex';
+      successMsg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    if (formSection) formSection.style.display = 'none';
+    if (dropzone) dropzone.style.display = 'none';
+    if (previewSection) previewSection.style.display = 'none';
+    if (reuploadSection) reuploadSection.style.display = 'block';
+
+    showToast(`✅ Prescription submitted! Chemist is reviewing your order.`, 'success', 6000);
+    logUploadEvent(selectedRxFile.name);
+
+  } catch (err) {
+    console.error('[KP] Upload error:', err);
+    showToast(`Upload failed: ${err.message}`, 'error');
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<span>📋</span> Submit Prescription to Chemist';
+    }
   }
 }
 
@@ -136,44 +241,55 @@ function initCamera() {
   if (!cameraBtn || !cameraInput) return;
 
   cameraBtn.addEventListener('click', () => {
-    if ('mediaDevices' in navigator && 'getUserMedia' in navigator.mediaDevices) {
-      cameraInput.click();
-    } else {
-      showToast('Camera not supported in this browser', 'error');
-    }
+    cameraInput.click();
   });
 
   cameraInput.addEventListener('change', () => {
     if (cameraInput.files[0]) {
-      // Trigger same handler as dropzone
-      const event = new Event('change');
-      const fileInput = document.getElementById('prescription-file');
-      if (fileInput) {
-        // Create a DataTransfer to set files
-        const dt = new DataTransfer();
-        dt.items.add(cameraInput.files[0]);
-        fileInput.files = dt.files;
-        fileInput.dispatchEvent(event);
-      }
+      stageFile(cameraInput.files[0]);
     }
   });
+}
+
+// ===== REUPLOAD =====
+function reuploadPrescription() {
+  selectedRxFile = null;
+  const fileInput = document.getElementById('prescription-file');
+  if (fileInput) fileInput.value = '';
+
+  const dropzone = document.getElementById('dropzone');
+  const formSection = document.getElementById('patient-details-form');
+  const successMsg = document.getElementById('upload-success-msg');
+  const previewSection = document.getElementById('upload-preview-section');
+  const reuploadSection = document.getElementById('reupload-section');
+  const submitBtn = document.getElementById('submit-rx-btn');
+
+  if (dropzone) {
+    dropzone.style.display = 'block';
+    const icon = dropzone.querySelector('.dropzone-icon');
+    const title = dropzone.querySelector('.dropzone-title');
+    if (icon) icon.textContent = '📄';
+    if (title) title.textContent = 'Drop your prescription here';
+  }
+  if (formSection) formSection.style.display = 'block';
+  if (previewSection) previewSection.style.display = 'none';
+  if (successMsg) successMsg.style.display = 'none';
+  if (reuploadSection) reuploadSection.style.display = 'none';
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<span>📋</span> Submit Prescription to Chemist';
+  }
 }
 
 // ===== WHATSAPP REDIRECT =====
 function sendOnWhatsApp() {
   const msg = encodeURIComponent(
-    'Hi Kirti Pharma,\n\nI would like to place a medicine order. Please assist me.\n\nThank you.'
+    'Hi Kirti Pharma,\n\nI have a prescription and would like to place an order. Please assist me.\n\nThank you.'
   );
-  window.open(`https://wa.me/${KP.WA_NUMBER}?text=${msg}`, '_blank');
+  window.open(`https://wa.me/919876543210?text=${msg}`, '_blank');
 }
 
 // ===== ANALYTICS =====
 function logUploadEvent(fileName) {
-  // Placeholder for analytics integration
-  console.log('[KP] Prescription uploaded:', fileName, new Date().toISOString());
-}
-
-// ===== REUPLOAD =====
-function reuploadPrescription() {
-  document.getElementById('prescription-file').click();
+  console.log('[KP] Prescription uploaded to pharmacist queue:', fileName, new Date().toISOString());
 }

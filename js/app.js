@@ -217,34 +217,7 @@ function setLoginRole(role) {
 
 function openLoginModal(e) {
   if (e && e.preventDefault) e.preventDefault();
-  const modal = document.getElementById('login-modal');
-  if (!modal) {
-    window.location.href = 'login.html';
-    return;
-  }
-
-  // Reset views
-  const phoneScreen = document.getElementById('login-phone-screen');
-  const loadingScreen = document.getElementById('login-loading-screen');
-  const otpScreen = document.getElementById('login-otp-screen');
-  if (phoneScreen) phoneScreen.style.display = 'block';
-  if (loadingScreen) loadingScreen.style.display = 'none';
-  if (otpScreen) otpScreen.style.display = 'none';
-
-  // Clear inputs
-  const phoneInput = document.getElementById('login-phone-input');
-  const nameInput = document.getElementById('login-name-input');
-  if (phoneInput) phoneInput.value = '';
-  if (nameInput) nameInput.value = '';
-  document.querySelectorAll('.otp-digit').forEach(el => el.value = '');
-
-  modal.classList.add('open');
-
-  setTimeout(() => {
-    if (phoneInput) phoneInput.focus();
-  }, 100);
-
-  setupOtpDigitAutoAdvance();
+  window.location.href = 'login.html';
 }
 
 function closeLoginModal() {

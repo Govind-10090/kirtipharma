@@ -4,14 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Login / Register — Kirti Pharma</title>
-  <meta name="description" content="Login to your Kirti Pharma account. Access medicine orders, prescription history, and fast Gondia delivery.">
+  <meta name="description" content="Login or register for your Kirti Pharma account. Instant access to medicine orders, prescription tracking, and fast Gondia home delivery.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=2">
-  <link rel="stylesheet" href="css/components.css?v=2">
-  <link rel="stylesheet" href="css/responsive.css?v=2">
+  <link rel="stylesheet" href="css/style.css?v=3">
+  <link rel="stylesheet" href="css/components.css?v=3">
+  <link rel="stylesheet" href="css/responsive.css?v=3">
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
     body {
       min-height: 100vh;
@@ -22,205 +27,611 @@
       background-size: cover;
       background-position: center;
       background-attachment: fixed;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      padding: 20px;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 24px 16px;
+      color: #0f172a;
+      position: relative;
     }
 
     body::before {
       content: '';
       position: fixed;
       inset: 0;
-      background: linear-gradient(135deg, rgba(0,35,20,0.72) 0%, rgba(15,23,42,0.65) 100%);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
+      background: linear-gradient(135deg, rgba(0, 48, 28, 0.78) 0%, rgba(15, 23, 42, 0.82) 100%);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       z-index: 0;
     }
 
-    .login-card {
+    .auth-container {
       position: relative;
       z-index: 1;
       width: 100%;
-      max-width: 420px;
-      background: rgba(255,255,255,0.97);
+      max-width: 440px;
+      animation: authCardEnter 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes authCardEnter {
+      from { transform: translateY(20px) scale(0.98); opacity: 0; }
+      to   { transform: translateY(0) scale(1);       opacity: 1; }
+    }
+
+    .auth-card {
+      background: #ffffff;
       border-radius: 24px;
-      padding: 40px 36px 32px;
-      box-shadow: 0 32px 64px rgba(0,0,0,0.28), 0 0 0 1px rgba(255,255,255,0.6) inset;
-      animation: slideUp 0.35s cubic-bezier(0.16,1,0.3,1);
-    }
-    @keyframes slideUp {
-      from { transform: translateY(24px); opacity: 0; }
-      to   { transform: translateY(0);    opacity: 1; }
+      padding: 36px 32px 28px;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.2);
     }
 
-    .logo-wrap { display: flex; align-items: center; justify-content: center; margin-bottom: 26px; }
-    .logo-wrap img { height: 52px; object-fit: contain; }
+    .logo-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 22px;
+      text-align: center;
+    }
 
-    .login-title { text-align: center; margin-bottom: 26px; }
-    .login-title h1 { font-size: 1.45rem; font-weight: 800; color: #0f172a; letter-spacing: -0.3px; margin-bottom: 6px; }
-    .login-title p  { font-size: 0.84rem; color: #64748b; line-height: 1.5; }
+    .logo-header a {
+      display: inline-block;
+      transition: transform 0.2s ease;
+    }
 
-    .auth-tabs {
+    .logo-header a:hover {
+      transform: scale(1.03);
+    }
+
+    .logo-header img {
+      height: 52px;
+      width: auto;
+      object-fit: contain;
+    }
+
+    .auth-heading {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .auth-heading h1 {
+      font-size: 1.55rem;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: -0.4px;
+      margin-bottom: 6px;
+    }
+
+    .auth-heading p {
+      font-size: 0.88rem;
+      color: #64748b;
+      line-height: 1.45;
+    }
+
+    /* Active User Banner */
+    .active-session-banner {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin-bottom: 20px;
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .session-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .session-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #006642;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .session-details {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .session-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: #0f172a;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .session-meta {
+      font-size: 12px;
+      color: #059669;
+      font-weight: 600;
+    }
+
+    .session-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-session-continue {
+      flex: 1;
+      padding: 9px 12px;
+      background: #006642;
+      color: white;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      text-align: center;
+      transition: background 0.15s;
+    }
+
+    .btn-session-continue:hover {
+      background: #00854f;
+    }
+
+    .btn-session-switch {
+      padding: 9px 12px;
+      background: #e2e8f0;
+      color: #334155;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .btn-session-switch:hover {
+      background: #cbd5e1;
+    }
+
+    /* Tabs */
+    .tab-pills {
       display: flex;
       background: #f1f5f9;
       border-radius: 12px;
       padding: 4px;
       gap: 4px;
-      margin-bottom: 22px;
-    }
-    .auth-tab {
-      flex: 1; padding: 10px; border: none; border-radius: 9px;
-      font-size: 13.5px; font-weight: 700; font-family: inherit;
-      cursor: pointer; background: transparent; color: #64748b;
-      transition: all 0.2s ease;
-    }
-    .auth-tab.active {
-      background: #006642; color: #fff;
-      box-shadow: 0 4px 14px rgba(0,102,66,0.3);
+      margin-bottom: 20px;
     }
 
-    .field { margin-bottom: 16px; }
-    .field label { display: block; font-size: 12.5px; font-weight: 600; color: #374151; margin-bottom: 7px; }
-    .field-wrap { position: relative; display: flex; align-items: center; }
-    .field-prefix { position: absolute; left: 14px; font-size: 14px; font-weight: 700; color: #64748b; pointer-events: none; }
-    .field input {
-      width: 100%; padding: 12px 14px;
-      font-size: 15px; font-family: inherit; color: #0f172a;
-      background: #f8fafc; border: 1.5px solid #e2e8f0;
-      border-radius: 11px; outline: none;
-      transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
+    .tab-pill {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 9px;
+      font-size: 13.5px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      background: transparent;
+      color: #64748b;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
-    .field input.with-prefix { padding-left: 46px; }
-    .field input.with-suffix { padding-right: 46px; }
-    .field input:focus { border-color: #006642; background: #fff; box-shadow: 0 0 0 3.5px rgba(0,102,66,0.13); }
-    .field input::placeholder { color: #94a3b8; font-size: 14px; }
 
-    .pw-toggle {
-      position: absolute; right: 13px;
-      background: none; border: none; cursor: pointer;
-      font-size: 17px; color: #94a3b8; line-height: 1;
-      padding: 4px; display: flex; align-items: center;
+    .tab-pill.active {
+      background: #006642;
+      color: #ffffff;
+      box-shadow: 0 4px 12px rgba(0, 102, 66, 0.28);
+    }
+
+
+    /* Form Fields */
+    .field-group {
+      margin-bottom: 16px;
+      text-align: left;
+    }
+
+    .field-group label {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 6px;
+    }
+
+    .input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .input-prefix {
+      position: absolute;
+      left: 14px;
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #64748b;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 12px 14px;
+      font-size: 14.5px;
+      font-family: inherit;
+      color: #0f172a;
+      background: #f8fafc;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 11px;
+      outline: none;
+      transition: all 0.18s ease;
+    }
+
+    .form-control.has-prefix {
+      padding-left: 48px;
+    }
+
+    .form-control.has-suffix {
+      padding-right: 44px;
+    }
+
+    .form-control:focus {
+      background: #ffffff;
+      border-color: #006642;
+      box-shadow: 0 0 0 3.5px rgba(0, 102, 66, 0.12);
+    }
+
+    .form-control::placeholder {
+      color: #94a3b8;
+      font-size: 13.5px;
+    }
+
+    .toggle-pw-btn {
+      position: absolute;
+      right: 12px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+      border-radius: 6px;
       transition: color 0.15s;
     }
-    .pw-toggle:hover { color: #475569; }
 
-    .btn-login {
-      width: 100%; padding: 14px; margin-top: 4px;
-      font-size: 15.5px; font-weight: 700; font-family: inherit;
+    .toggle-pw-btn:hover {
+      color: #334155;
+    }
+
+    .toggle-pw-btn svg {
+      width: 19px;
+      height: 19px;
+    }
+
+    /* Submit Button */
+    .btn-submit-auth {
+      width: 100%;
+      padding: 13px;
+      margin-top: 6px;
+      font-size: 15px;
+      font-weight: 700;
+      font-family: inherit;
       border-radius: 12px;
       background: linear-gradient(135deg, #006642 0%, #00854f 100%);
-      color: #fff; border: none; cursor: pointer;
+      color: #ffffff;
+      border: none;
+      cursor: pointer;
       letter-spacing: 0.01em;
-      box-shadow: 0 6px 20px rgba(0,102,66,0.3);
-      transition: opacity 0.2s, transform 0.12s, box-shadow 0.2s;
-    }
-    .btn-login:hover  { opacity: 0.92; box-shadow: 0 8px 26px rgba(0,102,66,0.38); }
-    .btn-login:active { transform: scale(0.985); }
-    .btn-login:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-
-    .helper-text { text-align: center; font-size: 12px; color: #94a3b8; margin-top: 14px; line-height: 1.5; }
-    .helper-text strong { color: #64748b; }
-
-    .db-badge {
-      display: inline-flex; align-items: center; gap: 7px;
-      font-size: 11.5px; font-weight: 600; color: #059669;
-      background: #ecfdf5; border: 1px solid #a7f3d0;
-      padding: 5px 12px; border-radius: 20px; margin-top: 22px;
-    }
-    .db-dot {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: #10b981; flex-shrink: 0;
-      animation: pulse 1.8s infinite;
-    }
-    @keyframes pulse {
-      0%  { box-shadow: 0 0 0 0 rgba(16,185,129,0.7); }
-      70% { box-shadow: 0 0 0 5px rgba(16,185,129,0); }
-      100%{ box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+      box-shadow: 0 6px 18px rgba(0, 102, 66, 0.28);
+      transition: all 0.18s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
     }
 
-    .back-link { display: block; text-align: center; margin-top: 18px; font-size: 13px; color: #006642; font-weight: 600; text-decoration: none; }
-    .back-link:hover { text-decoration: underline; }
+    .btn-submit-auth:hover {
+      opacity: 0.94;
+      box-shadow: 0 8px 24px rgba(0, 102, 66, 0.36);
+      transform: translateY(-1px);
+    }
 
+    .btn-submit-auth:active {
+      transform: translateY(1px) scale(0.99);
+    }
+
+    .btn-submit-auth:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .btn-spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255, 255, 255, 0.35);
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      display: none;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Helper and Footer */
+    .switch-tab-hint {
+      text-align: center;
+      font-size: 12.5px;
+      color: #64748b;
+      margin-top: 16px;
+      line-height: 1.5;
+    }
+
+    .switch-tab-hint a {
+      color: #006642;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .switch-tab-hint a:hover {
+      text-decoration: underline;
+    }
+
+    .card-footer {
+      margin-top: 24px;
+      padding-top: 18px;
+      border-top: 1px solid #f1f5f9;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .db-status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #059669;
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      padding: 5px 12px;
+      border-radius: 20px;
+    }
+
+    .db-status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #10b981;
+      animation: pulseDot 1.8s infinite;
+    }
+
+    @keyframes pulseDot {
+      0%   { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70%  { box-shadow: 0 0 0 5px rgba(16, 185, 129, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    .store-return-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #006642;
+      text-decoration: none;
+      transition: color 0.15s ease;
+    }
+
+    .store-return-link:hover {
+      text-decoration: underline;
+      color: #004d32;
+    }
+
+    /* Error Shake Animation */
     @keyframes shake {
-      0%,100% { transform: translateX(0); }
-      20%,60%  { transform: translateX(-6px); }
-      40%,80%  { transform: translateX(6px); }
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-6px); }
+      40%, 80% { transform: translateX(6px); }
     }
-    .shake { animation: shake 0.35s ease; }
 
-    #toast-container {
-      position: fixed; bottom: 24px; left: 50%;
-      transform: translateX(-50%); z-index: 9999;
-      display: flex; flex-direction: column; gap: 8px;
-      pointer-events: none;
+    .shake-error {
+      animation: shake 0.35s ease;
+      border-color: #ef4444 !important;
+      background: #fff5f5 !important;
     }
+
+    /* Toast Container */
+    #toast-container {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 99999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+      width: max-content;
+      max-width: 90vw;
+    }
+
+    .kp-toast {
+      padding: 12px 18px;
+      border-radius: 12px;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: #ffffff;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.35);
+      animation: toastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    @keyframes toastIn {
+      from { transform: translateY(12px); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+
+    .kp-toast.success { background: #006642; }
+    .kp-toast.error   { background: #dc2626; }
+    .kp-toast.warning { background: #d97706; }
+    .kp-toast.info    { background: #1e293b; }
   </style>
 </head>
 <body>
 
-<div class="login-card">
+<div class="auth-container">
+  <div class="auth-card">
 
-  <!-- Logo -->
-  <div class="logo-wrap">
-    <a href="index.html" title="Back to Kirti Pharma">
-      <img src="images/kirti-logo.png" alt="Kirti Pharma">
-    </a>
-  </div>
-
-  <!-- Title -->
-  <div class="login-title">
-    <h1 id="card-title">Welcome Back</h1>
-    <p id="card-sub">Enter your mobile number &amp; password to continue.</p>
-  </div>
-
-  <!-- Login / Register Tabs -->
-  <div class="auth-tabs" role="tablist">
-    <button class="auth-tab active" id="tab-login" onclick="switchTab('login')" role="tab">🔐 Login</button>
-    <button class="auth-tab" id="tab-register" onclick="switchTab('register')" role="tab">✨ Register</button>
-  </div>
-
-  <!-- Full Name (Register tab only) -->
-  <div class="field" id="name-field" style="display:none;">
-    <label for="input-name">Full Name</label>
-    <div class="field-wrap">
-      <input type="text" id="input-name" placeholder="e.g. Ramesh Patel" autocomplete="name">
+    <!-- Store Logo -->
+    <div class="logo-header">
+      <a href="index.html" title="Return to Kirti Pharma Gondia">
+        <img src="images/kirti-logo.png" alt="Kirti Pharma">
+      </a>
     </div>
-  </div>
 
-  <!-- Mobile Number -->
-  <div class="field">
-    <label for="input-phone">Mobile Number</label>
-    <div class="field-wrap">
-      <span class="field-prefix">+91</span>
-      <input type="tel" id="input-phone" class="with-prefix" placeholder="10-digit number" maxlength="10" inputmode="numeric" autocomplete="tel">
+    <!-- Active Logged In Session State -->
+    <div class="active-session-banner" id="active-session-banner">
+      <div class="session-info">
+        <div class="session-avatar" id="session-avatar">👤</div>
+        <div class="session-details">
+          <div class="session-name" id="session-user-name">Logged In User</div>
+          <div class="session-meta" id="session-user-role">Customer Account</div>
+        </div>
+      </div>
+      <div class="session-actions">
+        <a href="index.html" class="btn-session-continue" id="btn-session-continue">Continue to Store</a>
+        <button type="button" class="btn-session-switch" onclick="clearCurrentSession()">Switch Account</button>
+      </div>
     </div>
-  </div>
 
-  <!-- Password -->
-  <div class="field">
-    <label for="input-password">Password</label>
-    <div class="field-wrap">
-      <input type="password" id="input-password" class="with-suffix" placeholder="Minimum 4 characters" autocomplete="current-password">
-      <button type="button" class="pw-toggle" id="pw-toggle-btn" onclick="togglePw()" title="Show / hide password">👁</button>
+    <!-- Title & Subtitle -->
+    <div class="auth-heading">
+      <h1 id="card-title">Welcome Back</h1>
+      <p id="card-sub">Enter your mobile number &amp; password to continue.</p>
     </div>
-  </div>
 
-  <!-- Submit -->
-  <button type="button" class="btn-login" id="btn-submit" onclick="doAuth()">Login</button>
-
-  <p class="helper-text" id="helper-msg">
-    New here? Switch to <strong>Register</strong> to create your account.
-  </p>
-
-  <!-- DB Status -->
-  <div style="text-align:center;">
-    <div class="db-badge">
-      <span class="db-dot"></span>
-      <span>Connected to Supabase PostgreSQL</span>
+    <!-- Tabs: Login vs Register -->
+    <div class="tab-pills" role="tablist">
+      <button type="button" class="tab-pill active" id="tab-login" onclick="switchTab('login')" role="tab">
+        <span>🔐</span> Login
+      </button>
+      <button type="button" class="tab-pill" id="tab-register" onclick="switchTab('register')" role="tab">
+        <span>✨</span> Register
+      </button>
     </div>
+
+
+    <!-- Auth Form -->
+    <form id="auth-form" onsubmit="event.preventDefault(); doAuth();">
+
+      <!-- Full Name (Register tab only) -->
+      <div class="field-group" id="name-field" style="display: none;">
+        <label for="input-name">Full Name</label>
+        <div class="input-wrapper">
+          <input
+            type="text"
+            id="input-name"
+            class="form-control"
+            placeholder="e.g. Ramesh Patel"
+            autocomplete="name"
+          >
+        </div>
+      </div>
+
+      <!-- Mobile Number -->
+      <div class="field-group">
+        <label for="input-phone">Mobile Number</label>
+        <div class="input-wrapper">
+          <span class="input-prefix">+91</span>
+          <input
+            type="tel"
+            id="input-phone"
+            class="form-control has-prefix"
+            placeholder="10-digit mobile number"
+            maxlength="10"
+            inputmode="numeric"
+            autocomplete="tel"
+          >
+        </div>
+      </div>
+
+      <!-- Password -->
+      <div class="field-group">
+        <label for="input-password">Password</label>
+        <div class="input-wrapper">
+          <input
+            type="password"
+            id="input-password"
+            class="form-control has-suffix"
+            placeholder="Minimum 4 characters"
+            autocomplete="current-password"
+          >
+          <button
+            type="button"
+            class="toggle-pw-btn"
+            id="pw-toggle-btn"
+            onclick="togglePasswordVisibility()"
+            title="Show or hide password"
+            aria-label="Toggle password visibility"
+          >
+            <svg id="eye-icon-open" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <svg id="eye-icon-closed" style="display:none;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+              <line x1="1" y1="1" x2="23" y2="23"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Submit Button -->
+      <button type="submit" class="btn-submit-auth" id="btn-submit">
+        <span class="btn-spinner" id="btn-spinner"></span>
+        <span id="btn-submit-text">Login to Account</span>
+      </button>
+
+      <!-- Switch Hint -->
+      <p class="switch-tab-hint" id="helper-msg">
+        New to Kirti Pharma? <a onclick="switchTab('register')">Create an account</a>.
+      </p>
+
+    </form>
+
+    <!-- Footer Status & Back link -->
+    <div class="card-footer">
+      <div class="db-status-pill">
+        <span class="db-status-dot"></span>
+        <span>Connected to Supabase PostgreSQL</span>
+      </div>
+      <a href="index.html" class="store-return-link">
+        <span>←</span> Return to Kirti Storefront
+      </a>
+    </div>
+
   </div>
-
-  <a href="index.html" class="back-link">← Return to Store</a>
-
 </div>
 
 <div id="toast-container"></div>
@@ -229,111 +640,226 @@
 <script>
 let activeTab = 'login';
 
-function switchTab(tab) {
-  activeTab = tab;
-  const isReg = tab === 'register';
-  document.getElementById('tab-login').classList.toggle('active', !isReg);
-  document.getElementById('tab-register').classList.toggle('active', isReg);
-  document.getElementById('name-field').style.display = isReg ? 'block' : 'none';
-  document.getElementById('card-title').textContent = isReg ? 'Create Account' : 'Welcome Back';
-  document.getElementById('card-sub').textContent   = isReg
-    ? 'Fill in your details to get started.'
-    : 'Enter your mobile number & password to continue.';
-  document.getElementById('btn-submit').textContent = isReg ? 'Create Account' : 'Login';
-  document.getElementById('helper-msg').innerHTML   = isReg
-    ? 'Already have an account? Switch to <strong>Login</strong>.'
-    : 'New here? Switch to <strong>Register</strong> to create your account.';
-  ['input-name','input-phone','input-password'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = '';
-  });
+// Check if user is already logged in and display active banner
+function checkExistingSession() {
+  const isLoggedIn = localStorage.getItem('kp_logged_in') === 'true';
+  const banner     = document.getElementById('active-session-banner');
+  if (!banner) return;
+
+  if (isLoggedIn) {
+    const name = localStorage.getItem('kp_user_name') || 'Customer';
+    const role = (localStorage.getItem('kp_user_role') || 'customer').toLowerCase();
+    const isAdmin = role === 'admin' || role === 'chemist';
+
+    banner.style.display = 'block';
+    document.getElementById('session-user-name').textContent = name;
+    document.getElementById('session-user-role').textContent = isAdmin ? '🧑‍⚕️ Chemist / Admin' : '👤 Gondia Customer';
+    document.getElementById('session-avatar').textContent = isAdmin ? '🧑‍⚕️' : '👤';
+
+    const continueBtn = document.getElementById('btn-session-continue');
+    if (isAdmin) {
+      continueBtn.href = 'dashboard.html';
+      continueBtn.textContent = '🚀 Open Dashboard';
+    } else {
+      continueBtn.href = 'index.html';
+      continueBtn.textContent = '🛍️ Return to Store';
+    }
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+function clearCurrentSession() {
+  localStorage.removeItem('kp_logged_in');
+  localStorage.removeItem('kp_user_name');
+  localStorage.removeItem('kp_user_phone');
+  localStorage.removeItem('kp_user_role');
+  localStorage.removeItem('kp_user_addresses');
+  localStorage.removeItem('kp_token');
+  showAuthToast('Signed out of current session.', 'info');
+  document.getElementById('active-session-banner').style.display = 'none';
   document.getElementById('input-phone').focus();
 }
 
-function togglePw() {
-  const pw  = document.getElementById('input-password');
-  const btn = document.getElementById('pw-toggle-btn');
-  const hidden = pw.type === 'password';
-  pw.type         = hidden ? 'text' : 'password';
-  btn.textContent = hidden ? '🙈' : '👁';
+function switchTab(tab) {
+  activeTab = tab;
+  const isReg = tab === 'register';
+
+  document.getElementById('tab-login').classList.toggle('active', !isReg);
+  document.getElementById('tab-register').classList.toggle('active', isReg);
+
+  const nameField = document.getElementById('name-field');
+  nameField.style.display = isReg ? 'block' : 'none';
+
+  document.getElementById('card-title').textContent = isReg ? 'Create Account' : 'Welcome Back';
+  document.getElementById('card-sub').textContent   = isReg
+    ? 'Fill in your details to start ordering medicines in Gondia.'
+    : 'Enter your mobile number & password to continue.';
+
+  document.getElementById('btn-submit-text').textContent = isReg ? 'Create Account' : 'Login to Account';
+
+  document.getElementById('helper-msg').innerHTML = isReg
+    ? 'Already have an account? <a onclick="switchTab(\'login\')">Login here</a>.'
+    : 'New to Kirti Pharma? <a onclick="switchTab(\'register\')">Create an account</a>.';
+
+  if (isReg) {
+    document.getElementById('input-name').focus();
+  } else {
+    document.getElementById('input-phone').focus();
+  }
 }
 
-function shakeField(id) {
+function togglePasswordVisibility() {
+  const pwInput    = document.getElementById('input-password');
+  const eyeOpen    = document.getElementById('eye-icon-open');
+  const eyeClosed  = document.getElementById('eye-icon-closed');
+  const isPassword = pwInput.type === 'password';
+
+  pwInput.type = isPassword ? 'text' : 'password';
+  eyeOpen.style.display = isPassword ? 'none' : 'block';
+  eyeClosed.style.display = isPassword ? 'block' : 'none';
+}
+
+
+function shakeElement(id) {
   const el = document.getElementById(id);
   if (!el) return;
-  el.classList.remove('shake');
+  el.classList.remove('shake-error');
   void el.offsetWidth;
-  el.classList.add('shake');
+  el.classList.add('shake-error');
+  setTimeout(() => el.classList.remove('shake-error'), 500);
+}
+
+function showAuthToast(msg, type = 'info', duration = 3500) {
+  if (typeof showToast === 'function') {
+    showToast(msg, type, duration);
+    return;
+  }
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement('div');
+  toast.className = 'kp-toast ' + (type || 'info');
+  toast.textContent = msg;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(10px)';
+    toast.style.transition = 'all 0.3s ease';
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
 }
 
 async function doAuth() {
-  const phoneEl = document.getElementById('input-phone');
-  const pwEl    = document.getElementById('input-password');
-  const nameEl  = document.getElementById('input-name');
-  const btn     = document.getElementById('btn-submit');
+  const phoneEl  = document.getElementById('input-phone');
+  const pwEl     = document.getElementById('input-password');
+  const nameEl   = document.getElementById('input-name');
+  const btn      = document.getElementById('btn-submit');
+  const btnText  = document.getElementById('btn-submit-text');
+  const spinner  = document.getElementById('btn-spinner');
 
   const phone    = (phoneEl.value || '').replace(/\D/g, '').trim();
-  const password = (pwEl.value   || '').trim();
+  const password = (pwEl.value || '').trim();
   const name     = nameEl ? (nameEl.value || '').trim() : '';
 
   if (!/^\d{10}$/.test(phone)) {
-    showToast('Please enter a valid 10-digit mobile number', 'error');
-    shakeField('input-phone'); phoneEl.focus(); return;
-  }
-  if (password.length < 4) {
-    showToast('Password must be at least 4 characters', 'error');
-    shakeField('input-password'); pwEl.focus(); return;
-  }
-  if (activeTab === 'register' && !name) {
-    showToast('Please enter your full name', 'error');
-    shakeField('input-name'); nameEl.focus(); return;
+    showAuthToast('Please enter a valid 10-digit mobile number', 'error');
+    shakeElement('input-phone');
+    phoneEl.focus();
+    return;
   }
 
-  btn.disabled    = true;
-  btn.textContent = 'Please wait\u2026';
+  if (password.length < 4) {
+    showAuthToast('Password must be at least 4 characters', 'error');
+    shakeElement('input-password');
+    pwEl.focus();
+    return;
+  }
+
+  if (activeTab === 'register' && !name) {
+    showAuthToast('Please enter your full name to register', 'error');
+    shakeElement('input-name');
+    nameEl.focus();
+    return;
+  }
+
+  btn.disabled = true;
+  spinner.style.display = 'inline-block';
+  btnText.textContent = activeTab === 'register' ? 'Creating Account…' : 'Logging in…';
 
   try {
-    const res  = await fetch('/api/auth/login', {
+    const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, password, name })
+      body: JSON.stringify({ phone, password, name, action: activeTab })
     });
+
     const data = await res.json();
 
     if (!data.success || !data.user) {
-      showToast(data.error || 'Login failed. Please check your credentials.', 'error');
-      btn.disabled    = false;
-      btn.textContent = activeTab === 'register' ? 'Create Account' : 'Login';
+      showAuthToast(data.error || 'Authentication failed. Please check your details.', 'error');
+      btn.disabled = false;
+      spinner.style.display = 'none';
+      btnText.textContent = activeTab === 'register' ? 'Create Account' : 'Login to Account';
+      shakeElement('input-password');
       return;
     }
 
     const user = data.user;
     localStorage.setItem('kp_logged_in',       'true');
-    localStorage.setItem('kp_user_phone',       user.phone);
-    localStorage.setItem('kp_user_name',        user.name);
-    localStorage.setItem('kp_user_role',        user.role);
+    localStorage.setItem('kp_user_phone',      user.phone);
+    localStorage.setItem('kp_user_name',       user.name);
+    localStorage.setItem('kp_user_role',       user.role || 'customer');
     if (data.token)     localStorage.setItem('kp_token',          data.token);
     if (user.addresses) localStorage.setItem('kp_user_addresses', JSON.stringify(user.addresses));
 
-    if (user.role === 'admin') {
-      showToast('\uD83E\uDDD1\u200D\u2695\uFE0F Welcome, ' + user.name + '! Opening Dashboard\u2026', 'success', 2000);
-      setTimeout(() => { window.location.href = 'dashboard.html'; }, 800);
+    // Handle return redirect if specified in URL query
+    const urlParams = new URLSearchParams(window.location.search);
+    const redirectUrl = urlParams.get('redirect');
+
+    if (user.role === 'admin' || user.role === 'chemist') {
+      showAuthToast(`🧑‍⚕️ Welcome, ${user.name}! Opening Chemist Dashboard…`, 'success', 2500);
+      setTimeout(() => {
+        window.location.href = redirectUrl || 'dashboard.html';
+      }, 700);
     } else {
-      showToast('\u2705 Welcome, ' + user.name + '!', 'success', 2000);
-      setTimeout(() => { window.location.href = 'index.html'; }, 800);
+      showAuthToast(`✅ Welcome, ${user.name}!`, 'success', 2500);
+      setTimeout(() => {
+        window.location.href = redirectUrl || 'index.html';
+      }, 700);
     }
+
   } catch (err) {
-    showToast('Connection error. Please try again.', 'error');
-    btn.disabled    = false;
-    btn.textContent = activeTab === 'register' ? 'Create Account' : 'Login';
+    console.error('[AUTH ERROR]:', err);
+    showAuthToast('Network or server error. Please try again.', 'error');
+    btn.disabled = false;
+    spinner.style.display = 'none';
+    btnText.textContent = activeTab === 'register' ? 'Create Account' : 'Login to Account';
   }
 }
 
+// Mobile number input formatting (only numbers)
 document.addEventListener('DOMContentLoaded', () => {
-  ['input-name','input-phone','input-password'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') doAuth(); });
-  });
+  checkExistingSession();
+
+  const phoneInput = document.getElementById('input-phone');
+  if (phoneInput) {
+    phoneInput.addEventListener('input', (e) => {
+      e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10);
+    });
+    // Check if phone was passed in query
+    const urlParams = new URLSearchParams(window.location.search);
+    const phoneParam = urlParams.get('phone');
+    if (phoneParam) {
+      phoneInput.value = phoneParam.replace(/\D/g, '').slice(0, 10);
+      document.getElementById('input-password').focus();
+    } else {
+      phoneInput.focus();
+    }
+  }
 });
 </script>
 </body>
