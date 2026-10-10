@@ -284,10 +284,13 @@ if (shouldUseMySQL) {
 
 if (!isMySQL) {
   try {
-    const sqlite3 = require('sqlite3').verbose();
+    // sqlite3 is a native module — unavailable on Vercel/serverless. Wrap to prevent crash.
+    const sqlite3Module = require('sqlite3');
+    const sqlite3 = sqlite3Module.verbose ? sqlite3Module.verbose() : sqlite3Module;
     sqliteDb = new sqlite3.Database(DB_FILE, (err) => {
       if (err) {
         console.error('Failed to open SQLite database:', err.message);
+        sqliteDb = null;
       } else {
         console.log(`[DATABASE] 📁 Connected to Embedded Database: ${DB_FILE}`);
       }
