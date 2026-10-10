@@ -156,6 +156,20 @@ app.get('/api', (req, res) => {
 // Serve uploaded user files (prescriptions and custom medicine images)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Fallback for prescription images if missing from disk or requested as 'undefined'
+app.get('/uploads/prescriptions/:filename', (req, res, next) => {
+  const filePath = path.join(__dirname, 'uploads', 'prescriptions', req.params.filename);
+  if (fs.existsSync(filePath)) {
+    return res.sendFile(filePath);
+  }
+  const fallback = path.join(__dirname, 'images', 'med_fever_pain.png');
+  if (fs.existsSync(fallback)) {
+    res.setHeader('Content-Type', 'image/png');
+    return res.sendFile(fallback);
+  }
+  next();
+});
+
 // Serve frontend static assets (CSS, JS, Images, HTML files)
 app.use(express.static(path.join(__dirname)));
 

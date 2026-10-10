@@ -170,15 +170,20 @@ router.post('/', upload.single('medicineImage'), async (req, res) => {
 
     let imagePath = body.image || '';
     if (req.file) {
-      imagePath = `/uploads/medicines/${req.file.filename}`;
+      if (req.file.buffer) {
+        const mime = req.file.mimetype || 'image/jpeg';
+        imagePath = `data:${mime};base64,${req.file.buffer.toString('base64')}`;
+      } else if (req.file.filename) {
+        imagePath = `/uploads/medicines/${req.file.filename}`;
+      }
     } else if (body.imageBase64 && body.imageBase64.startsWith('data:image')) {
       const saved = saveBase64Image(body.imageBase64);
-      if (saved) imagePath = saved;
+      imagePath = saved || body.imageBase64;
     } else if (body.imageBase64) {
       imagePath = body.imageBase64;
     }
 
-    if (!imagePath || !imagePath.trim()) {
+    if (!imagePath || !imagePath.trim() || imagePath.includes('undefined')) {
       imagePath = CAT_IMAGES[body.category] || 'images/med_fever_pain.png';
     }
 
@@ -277,10 +282,15 @@ router.put('/:id', upload.single('medicineImage'), async (req, res) => {
       if (sold !== undefined) updates.sold = parseInt(sold);
 
       if (req.file) {
-        updates.image = `/uploads/medicines/${req.file.filename}`;
+        if (req.file.buffer) {
+          const mime = req.file.mimetype || 'image/jpeg';
+          updates.image = `data:${mime};base64,${req.file.buffer.toString('base64')}`;
+        } else if (req.file.filename) {
+          updates.image = `/uploads/medicines/${req.file.filename}`;
+        }
       } else if (req.body.imageBase64 && req.body.imageBase64.startsWith('data:image')) {
         const saved = saveBase64Image(req.body.imageBase64);
-        if (saved) updates.image = saved;
+        updates.image = saved || req.body.imageBase64;
       } else if (req.body.image !== undefined) {
         updates.image = req.body.image;
       }

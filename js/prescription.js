@@ -182,8 +182,20 @@ async function handlePrescriptionSubmission() {
     submitBtn.innerHTML = '<span>⏳</span> Sending to Chemist Queue...';
   }
 
+  let fileDataUrl = '';
+  try {
+    fileDataUrl = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(selectedRxFile);
+    });
+  } catch (_) {}
+
   const formData = new FormData();
   formData.append('prescription', selectedRxFile);
+  if (fileDataUrl) formData.append('fileDataUrl', fileDataUrl);
+  formData.append('fileName', selectedRxFile.name);
   formData.append('patient', patientName);
   formData.append('phone', rawPhone);
   formData.append('notes', notes);

@@ -226,9 +226,12 @@ function renderPrescriptionList() {
 function renderPrescriptionCard(p) {
   const sourceBadgeClass = p.source === 'WhatsApp' ? 'badge-green' : 'badge-blue';
   const statusClass = p.status === 'Pending' ? 'status-pending' : 'status-review';
-  const fileUrl = p.fileUrl || p.fileurl || '';
+  const rawFileUrl = p.fileUrl || p.fileurl || '';
   const fileName = p.fileName || p.filename || '';
-  const isImage = /\.(jpg|jpeg|png|webp)$/i.test(fileName) || (fileUrl && !fileName.toLowerCase().endsWith('.pdf') && !fileUrl.startsWith('data:application'));
+  const isPdf = fileName.toLowerCase().endsWith('.pdf');
+  const viewUrl = p.id ? `/api/prescriptions/${p.id}/file` : (rawFileUrl.includes('undefined') ? 'images/med_fever_pain.png' : rawFileUrl);
+  const thumbUrl = (rawFileUrl && !rawFileUrl.includes('undefined')) ? rawFileUrl : (p.id ? `/api/prescriptions/${p.id}/file` : 'images/med_fever_pain.png');
+
   return `
     <div class="prescription-card" id="rx-card-${p.id}" onclick="openBillBuilder(${p.id})">
       <div class="patient-avatar" style="background:${p.color || '#7C3AED'}">${p.initials || 'PT'}</div>
@@ -245,10 +248,10 @@ function renderPrescriptionCard(p) {
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0">
-        ${fileUrl ? `
-          ${isImage ? `<img src="${fileUrl}" alt="Rx" style="width:48px;height:48px;object-fit:cover;border-radius:8px;border:1px solid var(--border);flex-shrink:0" onerror="this.style.display='none'">` : `<span style="font-size:1.5rem" title="${fileName}">📄</span>`}
-          <a href="${fileUrl}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="btn btn-sm btn-secondary" style="font-size:0.7rem;padding:3px 8px">👁 View Rx</a>
-        ` : ''}
+        <div style="display:flex;align-items:center;gap:6px">
+          ${!isPdf ? `<img src="${thumbUrl}" alt="Rx" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0" onerror="this.src='/api/prescriptions/${p.id}/file'">` : `<span style="font-size:1.4rem" title="${fileName}">📄</span>`}
+          <a href="${viewUrl}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="btn btn-sm btn-secondary" style="font-size:0.7rem;padding:3px 8px">👁 View Rx</a>
+        </div>
         <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();openBillBuilder(${p.id})" style="flex-shrink:0">Review &amp; Bill →</button>
       </div>
     </div>
@@ -571,10 +574,11 @@ function renderBillBuilder(prescription) {
   // ─── Prescription preview panel ────────────────────────────────────────────
   const previewPanel  = document.getElementById('rx-preview-panel');
   if (previewPanel) {
-    const fileUrl  = prescription.fileUrl  || prescription.fileurl  || '';
+    const rawFileUrl  = prescription.fileUrl  || prescription.fileurl  || '';
     const fileName = prescription.fileName || prescription.filename || '';
     const isPdf    = fileName.toLowerCase().endsWith('.pdf');
-    const isImage  = !isPdf && fileUrl;
+    const viewUrl  = prescription.id ? `/api/prescriptions/${prescription.id}/file` : (rawFileUrl.includes('undefined') ? 'images/med_fever_pain.png' : rawFileUrl);
+    const previewSrc = (rawFileUrl && !rawFileUrl.includes('undefined')) ? rawFileUrl : viewUrl;
 
     document.getElementById('rx-prev-patient').textContent = prescription.patient + ' — ' + (prescription.source || 'App');
     document.getElementById('rx-prev-phone').textContent   = '📞 ' + (prescription.phone || 'N/A');
@@ -586,15 +590,15 @@ function renderBillBuilder(prescription) {
     const linkEl    = document.getElementById('rx-prev-link');
     const fullLink  = document.getElementById('rx-prev-fulllink');
 
-    if (fileUrl) {
-      if (linkEl)   linkEl.href   = fileUrl;
-      if (fullLink) fullLink.href = fileUrl;
-      if (imgEl) { imgEl.src = fileUrl; imgEl.style.display = isImage ? 'block' : 'none'; }
-      if (pdfEl)  pdfEl.style.display = isPdf ? 'flex' : 'none';
-      previewPanel.style.display = 'block';
-    } else {
-      previewPanel.style.display = 'none';
+    if (linkEl)   linkEl.href   = viewUrl;
+    if (fullLink) fullLink.href = viewUrl;
+    if (imgEl) {
+      imgEl.src = previewSrc;
+      imgEl.style.display = isPdf ? 'none' : 'block';
+      imgEl.onerror = () => { imgEl.src = `/api/prescriptions/${prescription.id}/file`; };
     }
+    if (pdfEl)  pdfEl.style.display = isPdf ? 'flex' : 'none';
+    previewPanel.style.display = 'block';
   }
   // ───────────────────────────────────────────────────────────────────────────
 

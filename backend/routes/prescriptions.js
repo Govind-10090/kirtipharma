@@ -3,6 +3,8 @@
 
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+const fs = require('fs');
 const { query, get, run } = require('../db');
 const supabaseRepo = require('../supabase');
 const upload = require('../middleware/upload');
@@ -89,6 +91,72 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// GET /api/prescriptions/:id/file - Stream/view prescription document directly
+router.get('/:id/file', async (req, res) => {
+  try {
+    let rx = null;
+    if (supabaseRepo.isSupabaseActive()) {
+      rx = await supabaseRepo.prescriptions.getById(req.params.id);
+    } else {
+      rx = await get(`SELECT * FROM prescriptions WHERE id = ?`, [req.params.id]);
+    }
+
+    if (!rx) {
+      return res.status(404).json({ success: false, error: 'Prescription not found' });
+    }
+
+    const fileUrl = rx.fileUrl || rx.fileurl || '';
+    const fileName = rx.fileName || rx.filename || 'prescription.jpg';
+
+    // 1. Data URL (Base64)
+    if (fileUrl && fileUrl.startsWith('data:')) {
+      const match = fileUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (match) {
+        const mimeType = match[1];
+        const buffer = Buffer.from(match[2], 'base64');
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        return res.send(buffer);
+      }
+    }
+
+    // 2. Full HTTP/HTTPS URL
+    if (fileUrl && (fileUrl.startsWith('http://') || fileUrl.startsWith('https://'))) {
+      return res.redirect(fileUrl);
+    }
+
+    // Fallback path
+    const fallbackPath = path.join(__dirname, '..', '..', 'images', 'med_fever_pain.png');
+
+    // 3. Invalid or undefined url
+    if (!fileUrl || fileUrl.includes('undefined')) {
+      if (fs.existsSync(fallbackPath)) {
+        res.setHeader('Content-Type', 'image/png');
+        return res.sendFile(fallbackPath);
+      }
+      return res.status(404).send('Prescription file unavailable');
+    }
+
+    // 4. Local file path
+    const cleanPath = fileUrl.replace(/^\//, '');
+    const fullPath = path.join(__dirname, '..', '..', cleanPath);
+    if (fs.existsSync(fullPath)) {
+      return res.sendFile(fullPath);
+    }
+
+    if (fs.existsSync(fallbackPath)) {
+      res.setHeader('Content-Type', 'image/png');
+      return res.sendFile(fallbackPath);
+    }
+
+    res.status(404).send('Prescription file not found');
+  } catch (err) {
+    console.error('[RX FILE VIEW ERROR]', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // POST /api/prescriptions - Upload prescription
 router.post('/', upload.single('prescription'), async (req, res) => {
   try {
@@ -97,12 +165,23 @@ router.post('/', upload.single('prescription'), async (req, res) => {
     let fileName = 'prescription.jpg';
 
     if (req.file) {
-      fileUrl = `/uploads/prescriptions/${req.file.filename}`;
-      fileName = req.file.originalname;
+      fileName = req.file.originalname || 'prescription.jpg';
+      if (req.file.buffer) {
+        // In-memory upload (Serverless / Vercel memoryStorage)
+        const mime = req.file.mimetype || 'image/jpeg';
+        fileUrl = `data:${mime};base64,${req.file.buffer.toString('base64')}`;
+      } else if (req.file.filename) {
+        // Disk storage (Local dev)
+        fileUrl = `/uploads/prescriptions/${req.file.filename}`;
+      } else if (body.fileDataUrl) {
+        fileUrl = body.fileDataUrl;
+      } else {
+        fileUrl = 'images/med_fever_pain.png';
+      }
     } else if (body.fileDataUrl) {
       fileUrl = body.fileDataUrl;
       fileName = body.fileName || 'prescription_upload.jpg';
-    } else if (body.fileUrl) {
+    } else if (body.fileUrl && !body.fileUrl.includes('undefined')) {
       fileUrl = body.fileUrl;
       fileName = body.fileName || 'prescription_upload.jpg';
     } else {
