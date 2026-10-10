@@ -171,15 +171,17 @@ app.use((req, res, next) => {
   next();
 });
 
-// Start Server
-app.listen(PORT, () => {
-  console.log(`\n======================================================`);
-  console.log(`🚀 Kirti Pharma Full-Stack Server Running!`);
-  console.log(`🌐 Local Web App:     http://localhost:${PORT}`);
-  console.log(`🧑‍⚕️ Chemist Dashboard: http://localhost:${PORT}/dashboard.html`);
-  console.log(`📦 Order Tracking:    http://localhost:${PORT}/track.html`);
-  console.log(`🔌 REST API Explorer: http://localhost:${PORT}/api`);
-  console.log(`======================================================\n`);
-});
+// Start Server (local development only — Vercel serverless exports app directly)
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`\n======================================================`);
+    console.log(`🚀 Kirti Pharma Full-Stack Server Running!`);
+    console.log(`🌐 Local Web App:     http://localhost:${PORT}`);
+    console.log(`🧑‍⚕️ Chemist Dashboard: http://localhost:${PORT}/dashboard.html`);
+    console.log(`📦 Order Tracking:    http://localhost:${PORT}/track.html`);
+    console.log(`🔌 REST API Explorer: http://localhost:${PORT}/api`);
+    console.log(`======================================================\n`);
+  });
+}
 
 module.exports = app;

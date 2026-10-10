@@ -10,10 +10,16 @@ const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
 const PRESCRIPTIONS_DIR = path.join(UPLOADS_DIR, 'prescriptions');
 const MEDICINES_DIR = path.join(UPLOADS_DIR, 'medicines');
 
-// Ensure upload folders exist
-[UPLOADS_DIR, PRESCRIPTIONS_DIR, MEDICINES_DIR].forEach(dir => {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-});
+// Ensure upload folders exist (only in writable local environments)
+if (!process.env.VERCEL) {
+  try {
+    [UPLOADS_DIR, PRESCRIPTIONS_DIR, MEDICINES_DIR].forEach(dir => {
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    });
+  } catch (e) {
+    // Read-only filesystem on serverless
+  }
+}
 
 // Category image mappings
 const CAT_IMAGES = {
@@ -283,22 +289,28 @@ if (shouldUseMySQL) {
 }
 
 if (!isMySQL) {
-  try {
-    // sqlite3 is a native module — unavailable on Vercel/serverless. Wrap to prevent crash.
-    const sqlite3Module = require('sqlite3');
-    const sqlite3 = sqlite3Module.verbose ? sqlite3Module.verbose() : sqlite3Module;
-    sqliteDb = new sqlite3.Database(DB_FILE, (err) => {
-      if (err) {
-        console.error('Failed to open SQLite database:', err.message);
-        sqliteDb = null;
-      } else {
-        console.log(`[DATABASE] 📁 Connected to Embedded Database: ${DB_FILE}`);
-      }
-    });
-  } catch (err) {
-    // SQLite not available (e.g. Vercel serverless) — Supabase handles all DB operations
-    console.warn('[DATABASE] SQLite unavailable (serverless env). Using Supabase cloud DB only.');
+  if (process.env.VERCEL) {
+    // Vercel serverless environment: skip SQLite completely, use Supabase Cloud DB
+    console.log('[DATABASE] ☁️ Vercel serverless environment detected. Using Supabase cloud DB only.');
     sqliteDb = null;
+  } else {
+    try {
+      // sqlite3 is a native module — unavailable on Vercel/serverless. Wrap to prevent crash.
+      const sqlite3Module = require('sqlite3');
+      const sqlite3 = sqlite3Module.verbose ? sqlite3Module.verbose() : sqlite3Module;
+      sqliteDb = new sqlite3.Database(DB_FILE, (err) => {
+        if (err) {
+          console.error('Failed to open SQLite database:', err.message);
+          sqliteDb = null;
+        } else {
+          console.log(`[DATABASE] 📁 Connected to Embedded Database: ${DB_FILE}`);
+        }
+      });
+    } catch (err) {
+      // SQLite not available — Supabase handles all DB operations
+      console.warn('[DATABASE] SQLite unavailable. Using Supabase cloud DB only.');
+      sqliteDb = null;
+    }
   }
 }
 
