@@ -132,7 +132,6 @@ body::before {
       <div class="nav-user-dropdown" id="nav-user-dropdown" style="display:none">
         <button class="nav-user-btn" id="nav-user-name" onclick="toggleUserDropdown(event)">👤 Account</button>
         <div class="dropdown-menu" id="nav-user-menu">
-          <a href="track.html" class="dropdown-item">📦 Track Orders</a>
           <a href="dashboard.html" class="dropdown-item active">🧑‍⚕️ Chemist Dashboard</a>
           <div style="border-top:1px solid var(--border);margin:4px 0"></div>
           <button class="dropdown-item" onclick="logoutUser()">Logout</button>
@@ -149,7 +148,6 @@ body::before {
   <a href="index.html">🏠 Home</a>
   <a href="index.html#medicine-section">💊 Medicines</a>
   <a href="prescription.html">📋 Upload Prescription</a>
-  <a href="track.html">📦 Track Order</a>
   <div class="mobile-nav-divider"></div>
   <a href="cart.html">🛒 Cart</a>
   <a href="dashboard.html" class="active">🧑‍⚕️ Chemist Dashboard</a>
@@ -235,7 +233,7 @@ body::before {
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
           <div>
             <div class="info-card-header" style="margin-bottom:2px">📦 Live Customer Orders</div>
-            <div style="font-size:0.8rem;color:var(--text-muted)">Manage order fulfillment, delivery riders, and live tracking</div>
+            <div style="font-size:0.8rem;color:var(--text-muted)">Manage order fulfillment, status updates, and delivery riders</div>
           </div>
           <div style="display:flex;gap:6px">
             <button class="btn btn-sm btn-primary order-dash-filter" onclick="filterDashOrders('all', this)">All</button>
@@ -428,10 +426,6 @@ body::before {
     <a href="prescription.html" class="tab-item">
       <span class="tab-icon">📋</span>
       <span>Rx</span>
-    </a>
-    <a href="track.html" class="tab-item">
-      <span class="tab-icon">📦</span>
-      <span>Track</span>
     </a>
     <a href="dashboard.html" class="tab-item active">
       <span class="tab-icon">🧑‍⚕️</span>

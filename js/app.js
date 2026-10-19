@@ -439,6 +439,13 @@ function checkLoginState() {
       a.style.display = isAdmin ? '' : 'none';
     }
   });
+
+  // Access Control: When logged in as chemist, remove Track Order navigation
+  document.querySelectorAll('a[href*="track.html"]').forEach(a => {
+    if (a.closest('#nav-user-menu') || a.closest('#mobile-drawer') || a.classList.contains('tab-item') || a.classList.contains('dropdown-item') || a.closest('.footer-links') || a.closest('footer')) {
+      a.style.display = isAdmin ? 'none' : '';
+    }
+  });
 }
 
 function toggleUserDropdown(e) {

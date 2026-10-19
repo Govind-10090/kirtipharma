@@ -318,7 +318,7 @@ function renderChemistOrders() {
             return `
               <tr style="border-bottom:1px solid #F1F5F9">
                 <td style="padding:10px 12px;font-weight:700;color:var(--primary-green)">
-                  <a href="track.html?orderId=${order.id}" style="color:var(--primary-green);text-decoration:none">${order.id}</a>
+                  ${order.id}
                 </td>
                 <td style="padding:10px 12px">
                   <div style="font-weight:600">${order.customerName}</div>

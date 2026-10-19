@@ -29,6 +29,15 @@ let ORDER_DATA = {
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
+  const isLoggedIn = localStorage.getItem('kp_logged_in') === 'true';
+  const role = (localStorage.getItem('kp_user_role') || '').toLowerCase();
+  const isAdmin = (isLoggedIn && (role === 'admin' || role === 'chemist'));
+  if (isAdmin) {
+    sessionStorage.setItem('kp_auth_msg', 'ℹ️ Track Order is a customer feature. Chemist orders are managed in the Chemist Dashboard.');
+    window.location.replace('dashboard.html');
+    return;
+  }
+
   await loadOrderFromApi();
   initTrackRealtimeEvents();
 });
