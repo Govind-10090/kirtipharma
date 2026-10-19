@@ -264,6 +264,7 @@ router.post('/', upload.single('medicineImage'), async (req, res) => {
       data: formattedCreated
     });
   } catch (err) {
+    console.error('[MEDICINE ADD ERROR]:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });

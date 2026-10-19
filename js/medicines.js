@@ -111,23 +111,58 @@ function saveMedicinesToStorage() {
   localStorage.setItem('kirti_medicines', JSON.stringify(MEDICINES));
 }
 
-// Automatically sync with Backend API
+// Automatically sync with Backend API or direct Supabase Cloud
 async function syncMedicinesFromBackend() {
+  let synced = false;
   try {
     const res = await fetch('/api/medicines');
-    const json = await res.json();
-    if (json.success && json.data && json.data.length > 0) {
-      MEDICINES = json.data;
-      saveMedicinesToStorage();
-
-      // Trigger re-render across active pages
-      if (typeof renderGrid === 'function') renderGrid();
-      if (typeof renderCartPage === 'function') renderCartPage();
-      if (typeof renderMedicineTable === 'function') renderMedicineTable();
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+        MEDICINES = json.data;
+        saveMedicinesToStorage();
+        synced = true;
+      }
     }
-  } catch (err) {
-    console.log('[Kirti Pharma] Backend offline or using local cached medicines.');
+  } catch (err) {}
+
+  if (!synced) {
+    try {
+      const sbRes = await fetch('https://fbbxjlvwejpqgkpngdam.supabase.co/rest/v1/medicines?select=*&order=id.asc', {
+        headers: {
+          'apikey': 'sb_publishable_SsDTP0Nb5QWiUBJd6nWCKQ_BJcDwgbc',
+          'Authorization': 'Bearer sb_publishable_SsDTP0Nb5QWiUBJd6nWCKQ_BJcDwgbc'
+        }
+      });
+      if (sbRes.ok) {
+        const sbData = await sbRes.json();
+        if (Array.isArray(sbData) && sbData.length > 0) {
+          MEDICINES = sbData.map(m => ({
+            ...m,
+            packSize: m.packsize ?? m.packSize ?? 10,
+            packUnit: m.packunit ?? m.packUnit ?? 'tablets',
+            imageColor: m.imagecolor ?? m.imageColor ?? '#FEE2E2',
+            image: (m.image && m.image.trim()) ? m.image : ((typeof CAT_IMAGES !== 'undefined' ? CAT_IMAGES[m.category] : null) || 'images/med_fever_pain.png'),
+            stock: Number(m.stock || 0),
+            sold: Number(m.sold || 0),
+            price: Number(m.price || 0),
+            mrp: Number(m.mrp || 0),
+            prescription_required: Boolean(m.prescription_required),
+            chronic: Boolean(m.chronic)
+          }));
+          saveMedicinesToStorage();
+          synced = true;
+        }
+      }
+    } catch (e) {
+      console.log('[Kirti Pharma] Direct Supabase Cloud sync unavailable, using local cache.');
+    }
   }
+
+  // Trigger re-render across active pages
+  if (typeof renderGrid === 'function') renderGrid();
+  if (typeof renderCartPage === 'function') renderCartPage();
+  if (typeof renderMedicineTable === 'function') renderMedicineTable();
 }
 
 // Sync on load

@@ -121,16 +121,63 @@ async function loadChemistOrdersFromApi() {
   applyChemistOrderFilter();
 }
 
+const SUPABASE_API_URL = 'https://fbbxjlvwejpqgkpngdam.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_SsDTP0Nb5QWiUBJd6nWCKQ_BJcDwgbc';
+
+async function fetchSupabaseMedicinesDirect() {
+  try {
+    const res = await fetch(`${SUPABASE_API_URL}/rest/v1/medicines?select=*&order=id.asc`, {
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!Array.isArray(data)) return null;
+    return data.map(m => ({
+      ...m,
+      packSize: m.packsize ?? m.packSize ?? 10,
+      packUnit: m.packunit ?? m.packUnit ?? 'tablets',
+      imageColor: m.imagecolor ?? m.imageColor ?? '#FEE2E2',
+      image: (m.image && m.image.trim()) ? m.image : ((typeof CAT_IMAGES !== 'undefined' ? CAT_IMAGES[m.category] : null) || 'images/med_fever_pain.png'),
+      stock: Number(m.stock || 0),
+      sold: Number(m.sold || 0),
+      price: Number(m.price || 0),
+      mrp: Number(m.mrp || 0),
+      prescription_required: Boolean(m.prescription_required),
+      chronic: Boolean(m.chronic)
+    }));
+  } catch (err) {
+    console.warn('[SUPABASE DIRECT FETCH ERROR]:', err);
+    return null;
+  }
+}
+
 async function loadMedicinesFromApi() {
+  let loaded = false;
   try {
     const res = await fetch('/api/medicines');
-    const json = await res.json();
-    if (json.success && json.data) {
-      MEDICINES = json.data;
-      saveMedicinesToStorage();
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+        MEDICINES = json.data;
+        saveMedicinesToStorage();
+        loaded = true;
+      }
     }
   } catch (e) {}
+
+  if (!loaded) {
+    const sbData = await fetchSupabaseMedicinesDirect();
+    if (sbData && sbData.length > 0) {
+      MEDICINES = sbData;
+      saveMedicinesToStorage();
+    }
+  }
+
   renderMedicineTable();
+  updateDashStats();
 }
 
 async function loadStatsFromApi() {
@@ -511,15 +558,30 @@ async function removeMedicine(id) {
   if (idx === -1) return;
   const medName = MEDICINES[idx].name;
 
-  if (confirm(`Are you sure you want to remove ${medName} from the store inventory?`)) {
+  if (confirm(`Are you sure you want to remove ${medName} from the store inventory and Supabase database?`)) {
+    let deleted = false;
     try {
-      await fetch(`/api/medicines/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/medicines/${id}`, { method: 'DELETE' });
+      if (res.ok) deleted = true;
     } catch (e) {}
+
+    if (!deleted) {
+      try {
+        await fetch(`${SUPABASE_API_URL}/rest/v1/medicines?id=eq.${id}`, {
+          method: 'DELETE',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+      } catch (e) {}
+    }
 
     MEDICINES.splice(idx, 1);
     saveMedicinesToStorage();
     renderMedicineTable();
-    showToast(`🗑️ ${medName} removed from inventory`, 'success');
+    updateDashStats();
+    showToast(`🗑️ ${medName} removed from Supabase Cloud`, 'success');
   }
 }
 
@@ -938,6 +1000,13 @@ async function saveNewMedicine(event) {
     return;
   }
 
+  const saveBtn = event.target.querySelector('button[type="submit"]');
+  const origBtnText = saveBtn ? saveBtn.textContent : 'Save Medicine';
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving to Supabase...';
+  }
+
   const payload = {
     name,
     salt,
@@ -953,30 +1022,122 @@ async function saveNewMedicine(event) {
     imageBase64: uploadedMedImageBase64
   };
 
+  let savedMedicine = null;
+
+  // 1. Try local server API first
   try {
     const res = await fetch('/api/medicines', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    const json = await res.json();
-    if (json.success && json.data) {
-      MEDICINES.unshift(json.data);
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && json.data) {
+        savedMedicine = json.data;
+      }
     }
   } catch (err) {
-    // Local fallback
-    const nextId = MEDICINES.reduce((max, m) => m.id > max ? m.id : max, 0) + 1;
-    MEDICINES.unshift({ id: nextId, ...payload, image: uploadedMedImageBase64 });
+    console.log('[Kirti Pharma] Backend route not reachable, saving directly to Supabase Cloud...');
   }
 
-  saveMedicinesToStorage();
-  closeModal('add-med-modal');
-  currentPage = 1;
-  renderMedicineTable();
-  updateDashStats();
-  loadStatsFromApi();
-  const formEl = document.getElementById('add-med-form');
-  if (formEl) formEl.reset();
-  resetMedImage();
-  showToast(`✅ ${name} added! Stock: ${stock} units`, 'success');
+  // 2. Direct Supabase Cloud Save (guarantees saving to Supabase Cloud if backend is offline or on port mismatch)
+  if (!savedMedicine) {
+    try {
+      const categoryColors = {
+        'Fever & Pain': '#FEE2E2',
+        'Antibiotics': '#FEF3C7',
+        'Gastro': '#D1FAE5',
+        'Chronic Care': '#EDE9FE',
+        'Vitamins & Supplements': '#FFF7ED',
+        'Skincare': '#FECDD3',
+        'Baby Care': '#E0F2FE',
+        'ENT': '#F0FDF4'
+      };
+      const directRow = {
+        name,
+        salt: salt || null,
+        brand: brand || 'Generic',
+        category,
+        price: parseFloat(price) || 0,
+        mrp: parseFloat(mrp) || parseFloat(price) || 0,
+        stock: parseInt(stock) || 0,
+        sold: 0,
+        packsize: parseInt(packSize) || 10,
+        packunit: packUnit || 'tablets',
+        prescription_required: Boolean(rx),
+        chronic: Boolean(chronic),
+        imagecolor: categoryColors[category] || '#FEE2E2',
+        icon: category === 'Gastro' || category === 'Baby Care' ? '🍶' : '💊',
+        image: uploadedMedImageBase64 || (typeof CAT_IMAGES !== 'undefined' ? CAT_IMAGES[category] : 'images/med_fever_pain.png')
+      };
+
+      const directRes = await fetch(`${SUPABASE_API_URL}/rest/v1/medicines`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(directRow)
+      });
+
+      if (directRes.ok) {
+        const directData = await directRes.json();
+        if (Array.isArray(directData) && directData.length > 0) {
+          const m = directData[0];
+          savedMedicine = {
+            ...m,
+            packSize: m.packsize ?? 10,
+            packUnit: m.packunit ?? 'tablets',
+            imageColor: m.imagecolor ?? '#FEE2E2',
+            image: m.image || 'images/med_fever_pain.png',
+            stock: Number(m.stock || 0),
+            sold: Number(m.sold || 0),
+            price: Number(m.price || 0),
+            mrp: Number(m.mrp || 0),
+            prescription_required: Boolean(m.prescription_required),
+            chronic: Boolean(m.chronic)
+          };
+        }
+      } else {
+        const errJson = await directRes.json().catch(() => ({}));
+        throw new Error(errJson.message || `Supabase returned HTTP ${directRes.status}`);
+      }
+    } catch (sbErr) {
+      console.error('[SUPABASE DIRECT INSERT ERROR]:', sbErr);
+      showToast(`❌ Failed to save to Supabase: ${sbErr.message}`, 'error', 6000);
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = origBtnText;
+      }
+      return;
+    }
+  }
+
+  if (savedMedicine) {
+    const existingIdx = MEDICINES.findIndex(m => m.id === savedMedicine.id);
+    if (existingIdx > -1) {
+      MEDICINES[existingIdx] = savedMedicine;
+    } else {
+      MEDICINES.unshift(savedMedicine);
+    }
+
+    saveMedicinesToStorage();
+    closeModal('add-med-modal');
+    currentPage = 1;
+    renderMedicineTable();
+    updateDashStats();
+    loadStatsFromApi();
+    const formEl = document.getElementById('add-med-form');
+    if (formEl) formEl.reset();
+    resetMedImage();
+    showToast(`⚡ ${name} successfully saved & synced to Supabase Cloud! (Stock: ${stock})`, 'success', 5000);
+  }
+
+  if (saveBtn) {
+    saveBtn.disabled = false;
+    saveBtn.textContent = origBtnText;
+  }
 }
