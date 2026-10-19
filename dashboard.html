@@ -65,6 +65,18 @@ body::before {
     background: rgba(255,255,255,0.95);
     backdrop-filter: blur(6px);
 }
+
+/* Clickable Live Order Rows */
+.dash-order-row {
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+.dash-order-row:hover {
+    background-color: #F0FDF4 !important;
+}
+.dash-order-row:hover td:first-child strong {
+    color: #047857 !important;
+}
 </style>
 
 </head>
@@ -500,6 +512,145 @@ body::before {
   </div>
 </div>
 
+<!-- ORDER DETAILS & BILLING MODAL -->
+<div class="modal-overlay" id="order-detail-modal" role="dialog" aria-modal="true" aria-labelledby="order-detail-title">
+  <div class="modal-box" style="max-width:800px;width:95%;max-height:90vh">
+    <div class="modal-header" style="background:#F8FAFC;border-bottom:1px solid var(--border);padding:16px 22px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <h3 class="modal-title" id="order-detail-title" style="margin:0;font-size:1.15rem;font-weight:800;color:var(--text-dark)">Order Details</h3>
+        <span id="order-detail-status-badge" class="badge badge-green" style="font-size:0.75rem;padding:4px 10px;font-weight:700">PREPARING</span>
+        <span id="order-detail-pay-badge" class="badge badge-blue" style="font-size:0.75rem;padding:4px 10px">UPI · Paid</span>
+      </div>
+      <button class="modal-close" onclick="closeModal('order-detail-modal')" aria-label="Close modal">✕</button>
+    </div>
+    <div class="modal-body" style="padding:20px 24px;overflow-y:auto;max-height:calc(90vh - 80px)">
+      <!-- Customer & Fulfillment Card -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:14px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:16px;margin-bottom:18px">
+        <div>
+          <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);font-weight:700">Customer Details</div>
+          <div id="od-customer-name" style="font-size:1.05rem;font-weight:700;color:var(--text-dark);margin-top:2px">—</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap">
+            <span id="od-customer-phone" style="font-size:0.85rem;color:var(--text-muted);font-weight:600">📞 —</span>
+            <a id="od-call-btn" href="#" class="btn btn-sm btn-secondary" style="font-size:0.72rem;padding:3px 8px">📞 Call</a>
+            <a id="od-wa-btn" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-secondary" style="font-size:0.72rem;padding:3px 8px;color:#047857;font-weight:600">💬 WhatsApp</a>
+          </div>
+          <div id="od-notes-wrap" style="display:none;margin-top:8px;font-size:0.8rem;background:#FEF3C7;color:#92400E;padding:6px 10px;border-radius:6px;border:1px solid #FDE68A">
+            📝 <strong>Instructions:</strong> <span id="od-notes-text"></span>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);font-weight:700">Delivery Address &amp; Time</div>
+          <div id="od-address" style="font-size:0.86rem;color:var(--text-dark);font-weight:600;margin-top:3px;line-height:1.4">📍 —</div>
+          <div id="od-time-info" style="font-size:0.78rem;color:var(--text-muted);margin-top:6px">Placed: Today · 5:02 PM</div>
+          <div id="od-prescription-wrap" style="display:none;margin-top:8px">
+            <a id="od-rx-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-secondary" style="font-size:0.75rem;padding:4px 10px;color:var(--primary-green);font-weight:700">
+              📋 View Linked Doctor's Prescription ↗
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Medicines Needed Table -->
+      <div style="margin-bottom:18px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+          <div style="font-size:0.95rem;font-weight:800;color:var(--text-dark);display:flex;align-items:center;gap:6px">
+            💊 Medicines Needed <span id="od-item-count" class="badge badge-green" style="font-size:0.75rem"></span>
+          </div>
+          <span style="font-size:0.75rem;color:var(--text-muted)">Matched against Gondia Store Inventory</span>
+        </div>
+
+        <div class="table-scroll-wrap" style="border:1px solid #E2E8F0;border-radius:10px;overflow:hidden">
+          <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+            <thead>
+              <tr style="background:#F1F5F9;text-align:left;border-bottom:1px solid #E2E8F0">
+                <th style="padding:10px 12px">#</th>
+                <th style="padding:10px 12px">Medicine &amp; Brand/Salt</th>
+                <th style="padding:10px 12px">Pack</th>
+                <th style="padding:10px 12px;text-align:center">Quantity Needed</th>
+                <th style="padding:10px 12px;text-align:right">Rate (₹)</th>
+                <th style="padding:10px 12px;text-align:right">Total (₹)</th>
+                <th style="padding:10px 12px;text-align:center">Inventory Stock</th>
+              </tr>
+            </thead>
+            <tbody id="od-medicines-tbody">
+              <!-- Rendered by dashboard.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Financial Calculation Bar -->
+      <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;padding:14px 18px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+        <div style="font-size:0.82rem;color:var(--text-muted)">
+          Payment Mode: <strong id="od-pay-mode" style="color:var(--text-dark)">UPI (Paid)</strong>
+        </div>
+        <div style="display:flex;gap:20px;align-items:center;text-align:right">
+          <div>
+            <div style="font-size:0.72rem;color:var(--text-muted)">Subtotal</div>
+            <div id="od-subtotal" style="font-weight:700;font-size:0.95rem">₹0</div>
+          </div>
+          <div>
+            <div style="font-size:0.72rem;color:var(--text-muted)">Delivery Fee</div>
+            <div id="od-delivery" style="font-weight:700;font-size:0.95rem">₹0</div>
+          </div>
+          <div style="background:var(--green-light);padding:6px 14px;border-radius:8px">
+            <div style="font-size:0.72rem;color:#047857;font-weight:700">NET BILL AMOUNT</div>
+            <div id="od-grand-total" style="font-size:1.25rem;font-weight:800;color:var(--green-primary)">₹0</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Buttons Bar -->
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding-top:14px;border-top:1px solid #E2E8F0">
+        <div style="display:flex;align-items:center;gap:8px">
+          <label style="font-size:0.8rem;font-weight:600;color:var(--text-muted)">Order Stage:</label>
+          <select id="od-stage-select" style="padding:6px 10px;font-size:0.8rem;border-radius:6px;border:1px solid var(--border);font-weight:600;background:white">
+            <option value="confirmed">Confirmed</option>
+            <option value="preparing">Being Prepared</option>
+            <option value="delivery">Out for Delivery 🛵</option>
+            <option value="delivered">Delivered ✅</option>
+          </select>
+          <button id="od-stage-btn" class="btn btn-sm btn-secondary" onclick="updateModalOrderStatus()">Save Stage</button>
+        </div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button type="button" class="btn btn-secondary" onclick="loadOrderIntoBillBuilderFromModal()" style="display:inline-flex;align-items:center;gap:6px">
+            ✏️ Load into Bill Builder
+          </button>
+          <button type="button" class="btn btn-primary" onclick="printModalOrderInvoice()" style="display:inline-flex;align-items:center;gap:6px;font-weight:700">
+            🧾 Generate &amp; Print Bill →
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- OFFICIAL TAX INVOICE MODAL & PRINT CONTAINER -->
+<div class="modal-overlay" id="invoice-modal" role="dialog" aria-modal="true" aria-labelledby="invoice-modal-title">
+  <div class="modal-box" style="max-width:840px;width:96%;max-height:92vh">
+    <div class="modal-header" style="background:#F8FAFC;border-bottom:1px solid var(--border);padding:14px 20px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <h3 class="modal-title" id="invoice-modal-title" style="margin:0;font-size:1.1rem;font-weight:800">🧾 Tax Invoice / Cash Memo</h3>
+        <span class="badge badge-green" style="font-size:0.75rem">Ready to Print</span>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button onclick="window.print()" class="btn btn-primary btn-sm" style="display:inline-flex;align-items:center;gap:5px;font-weight:700">
+          🖨️ Print Invoice
+        </button>
+        <button class="modal-close" onclick="closeModal('invoice-modal')" aria-label="Close modal">✕</button>
+      </div>
+    </div>
+    <div class="modal-body" style="padding:20px;overflow-y:auto;max-height:calc(92vh - 75px);background:#F1F5F9">
+      <!-- Printable sheet container -->
+      <div id="printable-invoice-container" style="background:white;padding:32px;border-radius:10px;border:1px solid #CBD5E1;box-shadow:0 4px 15px rgba(0,0,0,0.06);max-width:760px;margin:0 auto;color:#1E293B">
+        <!-- Rendered dynamically by printOrderInvoice / printPrescriptionInvoice -->
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ADD MEDICINE MODAL -->
 <div class="modal-overlay" id="add-med-modal" role="dialog" aria-modal="true" aria-labelledby="add-med-title">
   <div class="modal-box" style="max-width:540px">
@@ -616,10 +767,10 @@ body::before {
 
 <div id="toast-container"></div>
 
-<script src="js/app.js"></script>
-<script src="js/medicines.js"></script>
-<script src="js/search.js"></script>
-<script src="js/dashboard.js"></script>
+<script src="js/app.js?v=4.0"></script>
+<script src="js/medicines.js?v=4.0"></script>
+<script src="js/search.js?v=4.0"></script>
+<script src="js/dashboard.js?v=4.1"></script>
 
 <script>
   // Live clock
@@ -637,13 +788,57 @@ body::before {
 <!-- Print styles -->
 <style>
 @media print {
-  .navbar, .bottom-tab-bar, .whatsapp-fab, .access-notice,
-  #toast-container, .btn, #dash-search { display: none !important; }
-  body { background: white; }
+  /* Hide all regular UI when printing */
+  .navbar, .top-bar, .bottom-tab-bar, .whatsapp-fab, .access-notice,
+  #toast-container, .btn, #dash-search, .modal-header, .modal-close,
+  #dash-left-panel, #dash-orders-section, #medicine-table-section, #dash-customers-section {
+    display: none !important;
+  }
+  
+  body {
+    background: white !important;
+    color: #000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* When #invoice-modal is active, make #printable-invoice-container fill print page */
+  body:has(#invoice-modal.open) * {
+    visibility: hidden;
+  }
+  body:has(#invoice-modal.open) #printable-invoice-container,
+  body:has(#invoice-modal.open) #printable-invoice-container * {
+    visibility: visible;
+  }
+  body:has(#invoice-modal.open) #printable-invoice-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 15px !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
+  }
+
+  /* Modal reset for print */
+  .modal-overlay.open {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    backdrop-filter: none !important;
+  }
+  .modal-overlay.open .modal-box {
+    box-shadow: none !important;
+    border: none !important;
+    max-width: 100% !important;
+    transform: none !important;
+  }
+
   .container { max-width: 100%; padding: 0; }
-  #bill-builder-section { display: block !important; }
   .dashboard-grid { grid-template-columns: 1fr !important; }
-  #dash-left-panel { display: none !important; }
 }
 </style>
 </body>

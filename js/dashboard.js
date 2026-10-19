@@ -7,6 +7,8 @@ let currentPrescription = null;
 let chemistOrders = [];
 let filteredChemistOrders = [];
 let activeChemistOrderFilter = 'all';
+let currentBillingOrder = null;
+let currentModalOrder = null;
 let billRows = [];
 let dashTableSearch = '';
 let currentPage = 1;
@@ -268,6 +270,7 @@ function renderPrescriptionList() {
       `).join('');
     }
   }
+  renderDirectOrdersQueue();
 }
 
 function renderPrescriptionCard(p) {
@@ -330,14 +333,41 @@ function applyChemistOrderFilter() {
   renderChemistOrders();
 }
 
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function toggleOrderCollapse(orderId) {
+  const collapseRow = document.getElementById(`order-collapse-${orderId}`);
+  const chevron = document.getElementById(`expand-chevron-${orderId}`);
+  const mainRow = document.getElementById(`order-row-${orderId}`);
+  if (!collapseRow) return;
+
+  const isHidden = collapseRow.style.display === 'none' || !collapseRow.style.display;
+  collapseRow.style.display = isHidden ? 'table-row' : 'none';
+  if (chevron) {
+    chevron.textContent = isHidden ? '▾' : '▸';
+    chevron.style.color = isHidden ? 'var(--primary-green)' : 'var(--text-muted)';
+  }
+  if (mainRow) {
+    mainRow.style.backgroundColor = isHidden ? '#F0FDF4' : '';
+  }
+}
+
 function renderChemistOrders() {
   const container = document.getElementById('dash-orders-table-container');
   if (!container) return;
 
   if (filteredChemistOrders.length === 0) {
     container.innerHTML = `
-      <div style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.875rem">
-        No orders found in this view.
+      <div style="text-align:center;padding:28px;color:var(--text-muted);font-size:0.875rem">
+        📦 No orders found in this view.
       </div>
     `;
     return;
@@ -348,47 +378,190 @@ function renderChemistOrders() {
       <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
         <thead>
           <tr style="background:#F8FAFC;border-bottom:1px solid var(--border);text-align:left">
-            <th style="padding:10px 12px">Order ID</th>
+            <th style="padding:10px 12px;width:125px">Order ID</th>
             <th style="padding:10px 12px">Customer</th>
-            <th style="padding:10px 12px">Items</th>
-            <th style="padding:10px 12px">Total</th>
-            <th style="padding:10px 12px">Status</th>
-            <th style="padding:10px 12px">Change Stage</th>
+            <th style="padding:10px 12px;width:120px">Items</th>
+            <th style="padding:10px 12px;width:95px">Total</th>
+            <th style="padding:10px 12px;width:110px">Status</th>
+            <th style="padding:10px 12px;text-align:right;width:180px">Change Stage &amp; Bill</th>
           </tr>
         </thead>
         <tbody>
           ${filteredChemistOrders.map(order => {
             const isDelivered = order.status === 'delivered';
             const isDelivery = order.status === 'delivery';
-            const isPreparing = order.status === 'preparing' || order.status === 'confirmed';
+
+            let items = order.items;
+            if (typeof items === 'string') {
+              try {
+                items = JSON.parse(items);
+                if (typeof items === 'string') items = JSON.parse(items);
+              } catch(e) { items = []; }
+            }
+            items = Array.isArray(items) ? items : [];
+
+            const rawPhone = order.phone || '';
+            const cleanPhone = rawPhone.replace(/[^0-9]/g, '').slice(-10);
 
             return `
-              <tr style="border-bottom:1px solid #F1F5F9">
-                <td style="padding:10px 12px;font-weight:700;color:var(--primary-green)">
-                  ${order.id}
+              <!-- Compact Main Row (Click to expand/collapse inline) -->
+              <tr id="order-row-${order.id}" class="dash-order-row" onclick="toggleOrderCollapse('${order.id}')" style="border-bottom:1px solid #F1F5F9;cursor:pointer" title="Click to view medicines &amp; bill">
+                <td style="padding:10px 12px;vertical-align:middle">
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <span id="expand-chevron-${order.id}" style="color:var(--text-muted);font-size:0.8rem;transition:all 0.15s ease">▸</span>
+                    <div>
+                      <div style="font-weight:800;color:var(--primary-green);font-size:0.86rem">${order.id}</div>
+                      <div style="color:var(--text-muted);font-size:0.7rem;margin-top:1px">${order.placed || ''} · ${order.date || 'Today'}</div>
+                    </div>
+                  </div>
                 </td>
-                <td style="padding:10px 12px">
-                  <div style="font-weight:600">${order.customerName}</div>
-                  <div style="color:var(--text-muted);font-size:0.75rem">${order.phone}</div>
+
+                <td style="padding:10px 12px;vertical-align:middle">
+                  <div style="font-weight:700;color:var(--text-dark)">${escapeHtml(order.customerName || 'Customer')}</div>
+                  <div style="color:var(--text-muted);font-size:0.75rem">📞 ${escapeHtml(order.phone || '')}</div>
                 </td>
-                <td style="padding:10px 12px">
-                  <span title="${(order.items || []).map(i => `${i.name} (x${i.qty})`).join(', ')}">
-                    ${(order.items || []).length} items
+
+                <!-- Compact Items Badge (Clickable) -->
+                <td style="padding:10px 12px;vertical-align:middle">
+                  <span class="badge badge-blue" style="font-size:0.74rem;padding:3px 8px;font-weight:700;display:inline-flex;align-items:center;gap:4px">
+                    💊 ${items.length} item${items.length === 1 ? '' : 's'} <span style="font-size:0.65rem">▾</span>
                   </span>
                 </td>
-                <td style="padding:10px 12px;font-weight:700">₹${order.total || order.subtotal || 0}</td>
-                <td style="padding:10px 12px">
-                  <span class="badge ${isDelivered ? 'badge-green' : (isDelivery ? 'badge-blue' : 'badge-saffron')}" style="font-size:0.7rem">
+
+                <td style="padding:10px 12px;vertical-align:middle;white-space:nowrap">
+                  <div style="font-weight:800;font-size:0.92rem;color:var(--text-dark)">₹${order.total || order.subtotal || 0}</div>
+                  <div style="font-size:0.7rem;color:var(--text-muted)">${order.paymentMethod || 'UPI'}</div>
+                </td>
+
+                <td style="padding:10px 12px;vertical-align:middle;white-space:nowrap">
+                  <span class="badge ${isDelivered ? 'badge-green' : (isDelivery ? 'badge-blue' : 'badge-saffron')}" style="font-size:0.7rem;font-weight:700">
                     ${order.status.toUpperCase()}
                   </span>
                 </td>
-                <td style="padding:10px 12px">
-                  <select onchange="updateChemistOrderStatus('${order.id}', this.value)" style="padding:4px 8px;font-size:0.78rem;border-radius:6px;border:1px solid var(--border)">
-                    <option value="confirmed" ${order.status === 'confirmed' ? 'selected' : ''}>Confirmed</option>
-                    <option value="preparing" ${order.status === 'preparing' ? 'selected' : ''}>Being Prepared</option>
-                    <option value="delivery" ${order.status === 'delivery' ? 'selected' : ''}>Out for Delivery 🛵</option>
-                    <option value="delivered" ${order.status === 'delivered' ? 'selected' : ''}>Delivered ✅</option>
-                  </select>
+
+                <td style="padding:10px 12px;vertical-align:middle;text-align:right" onclick="event.stopPropagation()">
+                  <div style="display:inline-flex;align-items:center;gap:6px;justify-content:flex-end">
+                    <button class="btn btn-sm btn-primary" onclick="openOrderDetailsModal('${order.id}')" style="font-size:0.74rem;padding:4px 9px;font-weight:700;display:inline-flex;align-items:center;gap:4px;white-space:nowrap" title="Click to view medicines &amp; generate bill">
+                      👁️ View &amp; Bill
+                    </button>
+                    <select onchange="updateChemistOrderStatus('${order.id}', this.value)" style="padding:4px 8px;font-size:0.75rem;border-radius:6px;border:1px solid var(--border);background:white;font-weight:600">
+                      <option value="confirmed" ${order.status === 'confirmed' ? 'selected' : ''}>Confirmed</option>
+                      <option value="preparing" ${order.status === 'preparing' ? 'selected' : ''}>Preparing</option>
+                      <option value="delivery" ${order.status === 'delivery' ? 'selected' : ''}>Out for Delivery 🛵</option>
+                      <option value="delivered" ${order.status === 'delivered' ? 'selected' : ''}>Delivered ✅</option>
+                    </select>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- Collapsible Inline Drawer Row (Revealed on click) -->
+              <tr id="order-collapse-${order.id}" style="display:none;background:#F8FAFC;border-bottom:2px solid #E2E8F0">
+                <td colspan="6" style="padding:12px 14px">
+                  <div style="background:white;border:1px solid #E2E8F0;border-radius:8px;padding:12px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid #F1F5F9;padding-bottom:8px;flex-wrap:wrap;gap:8px">
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <span style="font-weight:800;font-size:0.86rem;color:#0F172A">
+                          💊 Medicines Needed (${items.length} item${items.length === 1 ? '' : 's'}) — #${order.id}
+                        </span>
+                        <span class="badge ${order.prescriptionId ? 'badge-blue' : 'badge-saffron'}" style="font-size:0.65rem">
+                          ${order.prescriptionId ? 'Prescription Order' : 'Direct Order'}
+                        </span>
+                      </div>
+                      <div style="display:flex;gap:6px;align-items:center">
+                        <button class="btn btn-sm btn-primary" onclick="loadOrderIntoBillBuilder('${order.id}')" style="font-size:0.72rem;padding:4px 10px;font-weight:700">
+                          🧾 Load into Bill Builder
+                        </button>
+                        <button class="btn btn-sm btn-secondary" onclick="printOrderInvoice('${order.id}')" style="font-size:0.72rem;padding:4px 10px">
+                          🖨️ Print Invoice
+                        </button>
+                        <button class="btn btn-sm btn-secondary" onclick="openOrderDetailsModal('${order.id}')" style="font-size:0.72rem;padding:4px 10px">
+                          👁️ View Full Details
+                        </button>
+                        <button class="btn btn-sm" onclick="toggleOrderCollapse('${order.id}')" style="font-size:0.72rem;padding:4px 8px;background:#F1F5F9;border:1px solid #CBD5E1;border-radius:6px;color:#475569">
+                          ▲ Close
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style="overflow-x:auto;margin-bottom:8px">
+                      <table style="width:100%;border-collapse:collapse;font-size:0.78rem">
+                        <thead>
+                          <tr style="background:#F8FAFC;border-bottom:1px solid #E2E8F0;text-align:left;color:#475569">
+                            <th style="padding:6px 8px;width:30px">#</th>
+                            <th style="padding:6px 8px">Medicine</th>
+                            <th style="padding:6px 8px;width:80px">Packing</th>
+                            <th style="padding:6px 8px;text-align:center;width:60px">Qty</th>
+                            <th style="padding:6px 8px;text-align:right;width:80px">Unit Price</th>
+                            <th style="padding:6px 8px;text-align:right;width:85px">Total</th>
+                            <th style="padding:6px 8px;text-align:center;width:120px">Stock Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          ${items.length === 0 ? `<tr><td colspan="7" style="text-align:center;padding:12px;color:var(--text-muted)">No medicine items recorded.</td></tr>` : items.map((it, idx) => {
+                            const med = MEDICINES.find(m => m.id === it.id) ||
+                                        MEDICINES.find(m => m.name && it.name && m.name.toLowerCase() === it.name.toLowerCase());
+                            const name = it.name || it.medicineName || 'Medicine';
+                            const qty = it.qty || it.quantity || 1;
+                            const brand = it.brand || (med ? med.brand : '');
+                            const salt = med ? (med.salt || '') : '';
+                            const price = it.price || (med ? med.price : 0);
+                            const pack = it.packUnit || (med ? med.packUnit : 'strip');
+                            const rowTotal = qty * price;
+
+                            let stockBadge = '';
+                            if (med) {
+                              if (med.stock >= qty) {
+                                stockBadge = `<span class="badge badge-green" style="font-size:0.68rem;font-weight:700">✅ In Stock (${med.stock})</span>`;
+                              } else if (med.stock > 0) {
+                                stockBadge = `<span class="badge badge-saffron" style="font-size:0.68rem;font-weight:700">⚠️ Low (${med.stock})</span>`;
+                              } else {
+                                stockBadge = `<span class="badge" style="background:#FEE2E2;color:#991B1B;font-size:0.68rem;font-weight:700">❌ Out of Stock</span>`;
+                              }
+                            } else {
+                              stockBadge = `<span class="badge badge-blue" style="font-size:0.68rem">Standard Item</span>`;
+                            }
+
+                            return `
+                              <tr style="border-bottom:1px solid #F1F5F9">
+                                <td style="padding:6px 8px;color:var(--text-muted);font-weight:700">${idx + 1}</td>
+                                <td style="padding:6px 8px">
+                                  <div style="font-weight:700;color:var(--text-dark)">💊 ${escapeHtml(name)}</div>
+                                  ${brand ? `<div style="font-size:0.7rem;color:var(--primary-green);font-weight:600">${escapeHtml(brand)}</div>` : ''}
+                                  ${salt ? `<div style="font-size:0.68rem;color:var(--text-muted)">${escapeHtml(salt)}</div>` : ''}
+                                </td>
+                                <td style="padding:6px 8px;color:var(--text-muted)">${escapeHtml(pack)}</td>
+                                <td style="padding:6px 8px;text-align:center">
+                                  <span style="background:#EEF2FF;color:#4338CA;font-weight:800;padding:2px 7px;border-radius:5px;font-size:0.78rem">
+                                    x ${qty}
+                                  </span>
+                                </td>
+                                <td style="padding:6px 8px;text-align:right;font-weight:600">₹${price}</td>
+                                <td style="padding:6px 8px;text-align:right;font-weight:800;color:var(--primary-green)">₹${rowTotal}</td>
+                                <td style="padding:6px 8px;text-align:center">${stockBadge}</td>
+                              </tr>
+                            `;
+                          }).join('')}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;padding-top:6px;border-top:1px dashed #E2E8F0;font-size:0.74rem;color:var(--text-muted)">
+                      <div>
+                        📍 <strong>Delivery Address:</strong> ${escapeHtml(order.deliveryAddress || 'Gondia store customer')} · 
+                        👤 <strong>Customer:</strong> ${escapeHtml(order.customerName || 'Customer')} (📞 ${escapeHtml(order.phone || 'N/A')})
+                      </div>
+                      ${cleanPhone ? `
+                        <div style="display:flex;gap:6px">
+                          <a href="tel:${cleanPhone}" class="btn btn-sm btn-secondary" style="font-size:0.68rem;padding:2px 7px;text-decoration:none">
+                            📞 Call
+                          </a>
+                          <a href="https://wa.me/91${cleanPhone}?text=Hello%20${encodeURIComponent(order.customerName || 'Customer')},%20this%20is%20Kirti%20Pharma%20regarding%20Order%20%23${order.id}" target="_blank" class="btn btn-sm btn-secondary" style="font-size:0.68rem;padding:2px 7px;text-decoration:none;color:#047857">
+                            💬 WhatsApp
+                          </a>
+                        </div>
+                      ` : ''}
+                    </div>
+                  </div>
                 </td>
               </tr>
             `;
@@ -418,6 +591,385 @@ async function updateChemistOrderStatus(orderId, newStatus) {
   } catch (err) {
     showToast('Failed to update status', 'error');
   }
+}
+
+// ===== ORDER DETAILS MODAL & INVOICE BILLING =====
+function openOrderDetailsModal(orderId) {
+  const order = chemistOrders.find(o => o.id === orderId);
+  if (!order) {
+    showToast(`Order #${orderId} not found`, 'error');
+    return;
+  }
+  currentModalOrder = order;
+
+  // Header
+  const titleEl = document.getElementById('order-detail-title');
+  if (titleEl) titleEl.textContent = `Order #${order.id}`;
+
+  const statusBadge = document.getElementById('order-detail-status-badge');
+  if (statusBadge) {
+    const isDelivered = order.status === 'delivered';
+    const isDelivery = order.status === 'delivery';
+    statusBadge.className = `badge ${isDelivered ? 'badge-green' : (isDelivery ? 'badge-blue' : 'badge-saffron')}`;
+    statusBadge.textContent = (order.status || 'PREPARING').toUpperCase();
+  }
+
+  const payBadge = document.getElementById('order-detail-pay-badge');
+  if (payBadge) {
+    payBadge.textContent = `${order.paymentMethod || 'UPI'} · ${order.paymentStatus || 'Paid'}`;
+  }
+
+  // Customer Card
+  const nameEl = document.getElementById('od-customer-name');
+  if (nameEl) nameEl.textContent = order.customerName || 'Kirti Customer';
+
+  const phoneEl = document.getElementById('od-customer-phone');
+  if (phoneEl) phoneEl.textContent = `📞 ${order.phone || 'N/A'}`;
+
+  const callBtn = document.getElementById('od-call-btn');
+  if (callBtn) callBtn.href = `tel:${order.phone || '+919876543210'}`;
+
+  const waBtn = document.getElementById('od-wa-btn');
+  if (waBtn) {
+    const cleanDigits = (order.phone || '9876543210').replace(/[^0-9]/g, '').slice(-10);
+    waBtn.href = `https://wa.me/91${cleanDigits}?text=${encodeURIComponent(`Hello ${order.customerName || ''}, this is Kirti Pharma Gondia regarding your order #${order.id}.`)}`;
+  }
+
+  const notesWrap = document.getElementById('od-notes-wrap');
+  const notesText = document.getElementById('od-notes-text');
+  if (notesWrap && notesText) {
+    if (order.notes) {
+      notesText.textContent = order.notes;
+      notesWrap.style.display = 'block';
+    } else {
+      notesWrap.style.display = 'none';
+    }
+  }
+
+  const addrEl = document.getElementById('od-address');
+  if (addrEl) addrEl.textContent = `📍 ${order.deliveryAddress || 'Gondia Store Delivery'}`;
+
+  const timeEl = document.getElementById('od-time-info');
+  if (timeEl) timeEl.textContent = `Placed: ${order.date || 'Today'} · ${order.placed || ''}`;
+
+  const rxWrap = document.getElementById('od-prescription-wrap');
+  const rxLink = document.getElementById('od-rx-link');
+  if (rxWrap && rxLink) {
+    if (order.prescriptionId) {
+      rxLink.href = `/api/prescriptions/${order.prescriptionId}/file`;
+      rxWrap.style.display = 'block';
+    } else {
+      rxWrap.style.display = 'none';
+    }
+  }
+
+  // Parse items
+  let items = order.items;
+  if (typeof items === 'string') {
+    try { items = JSON.parse(items); } catch(e) { items = []; }
+  }
+  items = Array.isArray(items) ? items : [];
+
+  const countBadge = document.getElementById('od-item-count');
+  if (countBadge) countBadge.textContent = `${items.length} item${items.length === 1 ? '' : 's'}`;
+
+  // Render Medicines Needed Table
+  const tbody = document.getElementById('od-medicines-tbody');
+  if (tbody) {
+    if (items.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-muted)">No medicine items found in this order.</td></tr>`;
+    } else {
+      tbody.innerHTML = items.map((item, idx) => {
+        const med = MEDICINES.find(m => m.id === item.id) ||
+                    MEDICINES.find(m => m.name && item.name && m.name.toLowerCase() === item.name.toLowerCase());
+        const qty = item.qty || 1;
+        const unitPrice = item.price || (med ? med.price : 0);
+        const rowTotal = qty * unitPrice;
+        const salt = med ? (med.salt || '') : '';
+        const brand = item.brand || (med ? med.brand : '');
+        const pack = item.packUnit || (med ? med.packUnit : 'strip');
+
+        let stockBadge = '';
+        if (med) {
+          if (med.stock >= qty) {
+            stockBadge = `<span class="badge badge-green" style="font-size:0.7rem;font-weight:700">✅ In Stock (${med.stock})</span>`;
+          } else if (med.stock > 0) {
+            stockBadge = `<span class="badge badge-saffron" style="font-size:0.7rem;font-weight:700">⚠️ Low (${med.stock})</span>`;
+          } else {
+            stockBadge = `<span class="badge" style="background:#FEE2E2;color:#991B1B;font-size:0.7rem;font-weight:700">❌ Out of Stock</span>`;
+          }
+        } else {
+          stockBadge = `<span class="badge badge-blue" style="font-size:0.7rem">Prescribed Item</span>`;
+        }
+
+        return `
+          <tr style="border-bottom:1px solid #F1F5F9">
+            <td style="padding:10px 12px;font-weight:700;color:var(--text-muted)">${idx + 1}</td>
+            <td style="padding:10px 12px">
+              <div style="font-weight:700;color:var(--text-dark);font-size:0.86rem">${escapeHtml(item.name)}</div>
+              ${salt ? `<div style="font-size:0.72rem;color:var(--text-muted)">Salt: ${escapeHtml(salt)}</div>` : ''}
+              ${brand ? `<div style="font-size:0.72rem;color:var(--primary-green);font-weight:600">Brand: ${escapeHtml(brand)}</div>` : ''}
+            </td>
+            <td style="padding:10px 12px;color:var(--text-muted);font-size:0.78rem">${escapeHtml(pack)}</td>
+            <td style="padding:10px 12px;text-align:center">
+              <span style="background:#EEF2FF;color:#4338CA;padding:4px 10px;border-radius:6px;font-weight:800;font-size:0.85rem">
+                x ${qty}
+              </span>
+            </td>
+            <td style="padding:10px 12px;text-align:right;font-weight:600">₹${unitPrice}</td>
+            <td style="padding:10px 12px;text-align:right;font-weight:800;color:var(--primary-green)">₹${rowTotal}</td>
+            <td style="padding:10px 12px;text-align:center">${stockBadge}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
+
+  // Financial Breakdown
+  const subtotal = order.subtotal || items.reduce((s, i) => s + (i.price || 0) * (i.qty || 1), 0);
+  const delivery = order.deliveryFee ?? (subtotal >= 499 ? 0 : 30);
+  const total = order.total || (subtotal + delivery);
+
+  const subtotalEl = document.getElementById('od-subtotal');
+  if (subtotalEl) subtotalEl.textContent = `₹${subtotal}`;
+
+  const deliveryEl = document.getElementById('od-delivery');
+  if (deliveryEl) deliveryEl.textContent = delivery === 0 ? 'FREE' : `₹${delivery}`;
+
+  const grandEl = document.getElementById('od-grand-total');
+  if (grandEl) grandEl.textContent = `₹${total}`;
+
+  const payModeEl = document.getElementById('od-pay-mode');
+  if (payModeEl) payModeEl.textContent = `${order.paymentMethod || 'UPI'} (${order.paymentStatus || 'Paid'})`;
+
+  // Stage selector
+  const stageSelect = document.getElementById('od-stage-select');
+  if (stageSelect) stageSelect.value = order.status || 'preparing';
+
+  openModal('order-detail-modal');
+}
+
+async function updateModalOrderStatus() {
+  if (!currentModalOrder) return;
+  const stageSelect = document.getElementById('od-stage-select');
+  if (!stageSelect) return;
+  const newStatus = stageSelect.value;
+  await updateChemistOrderStatus(currentModalOrder.id, newStatus);
+  currentModalOrder.status = newStatus;
+  const statusBadge = document.getElementById('order-detail-status-badge');
+  if (statusBadge) {
+    statusBadge.textContent = newStatus.toUpperCase();
+    const isDelivered = newStatus === 'delivered';
+    const isDelivery = newStatus === 'delivery';
+    statusBadge.className = `badge ${isDelivered ? 'badge-green' : (isDelivery ? 'badge-blue' : 'badge-saffron')}`;
+  }
+}
+
+function loadOrderIntoBillBuilderFromModal() {
+  if (!currentModalOrder) return;
+  loadOrderIntoBillBuilder(currentModalOrder.id);
+  closeModal('order-detail-modal');
+}
+
+function loadOrderIntoBillBuilder(orderId) {
+  const order = chemistOrders.find(o => o.id === orderId);
+  if (!order) return;
+
+  currentBillingOrder = order;
+  currentPrescription = null;
+
+  let items = order.items;
+  if (typeof items === 'string') {
+    try { items = JSON.parse(items); } catch(e) { items = []; }
+  }
+  items = Array.isArray(items) ? items : [];
+
+  billRows = items.map(item => {
+    const med = MEDICINES.find(m => m.id === item.id) ||
+                MEDICINES.find(m => m.name && item.name && m.name.toLowerCase() === item.name.toLowerCase());
+    return {
+      medicineId: med ? med.id : (MEDICINES[0] ? MEDICINES[0].id : item.id),
+      name: item.name,
+      qty: item.qty || 1,
+      unitPrice: item.price || (med ? med.price : 0)
+    };
+  });
+
+  const section = document.getElementById('bill-builder-section');
+  if (section) {
+    section.style.display = 'block';
+    section.style.opacity = '1';
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  renderBillBuilder(currentBillingOrder);
+  showToast(`📋 Order #${order.id} loaded into Bill Builder. You can now adjust medicines or print bill!`, 'success', 4000);
+}
+
+function printModalOrderInvoice() {
+  if (!currentModalOrder) return;
+  printOrderInvoice(currentModalOrder.id);
+}
+
+function printOrderInvoice(orderId, customRows = null) {
+  const order = chemistOrders.find(o => o.id === orderId) || currentModalOrder || currentBillingOrder;
+  if (!order) {
+    showToast('Order not found', 'error');
+    return;
+  }
+
+  let items = [];
+  if (customRows && customRows.length > 0) {
+    items = customRows.map(r => {
+      const med = MEDICINES.find(m => m.id === r.medicineId);
+      return {
+        name: med ? med.name : (r.name || 'Medicine'),
+        brand: med ? med.brand : '',
+        salt: med ? med.salt : '',
+        packUnit: med ? med.packUnit : 'strip',
+        qty: r.qty,
+        price: r.unitPrice
+      };
+    });
+  } else {
+    items = order.items;
+    if (typeof items === 'string') {
+      try { items = JSON.parse(items); } catch(e) { items = []; }
+    }
+    items = Array.isArray(items) ? items : [];
+  }
+
+  const subtotal = items.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0);
+  const delivery = order.deliveryFee ?? (subtotal >= 499 ? 0 : 30);
+  const grandTotal = subtotal + delivery;
+  const cgst = (subtotal * 0.06).toFixed(2);
+  const sgst = (subtotal * 0.06).toFixed(2);
+
+  const container = document.getElementById('printable-invoice-container');
+  if (!container) return;
+
+  container.innerHTML = `
+    <!-- PHARMACY HEADER -->
+    <div style="border-bottom:2px solid #059669;padding-bottom:14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:1.8rem">🌿</span>
+          <div>
+            <h1 style="margin:0;font-size:1.45rem;font-weight:900;color:#047857;letter-spacing:0.5px">KIRTI PHARMA &amp; SURGICALS</h1>
+            <div style="font-size:0.75rem;color:#4B5563;font-weight:600">RETAIL CHEMIST, DRUGGIST &amp; SURGICAL SUPPLIERS</div>
+          </div>
+        </div>
+        <div style="font-size:0.75rem;color:#4B5563;margin-top:6px;line-height:1.4">
+          Main Bazar, Near City Bus Stand, Ring Road, Gondia - 441614 (Maharashtra)<br>
+          📞 Phone: +91 98765 43210 &nbsp;|&nbsp; ✉️ care@kirtipharma.com
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div style="display:inline-block;background:#ECFDF5;border:1px solid #A7F3D0;color:#065F46;font-weight:800;font-size:0.85rem;padding:4px 12px;border-radius:6px">
+          TAX INVOICE / CASH MEMO
+        </div>
+        <div style="font-size:0.72rem;color:#4B5563;margin-top:6px">
+          <strong>D.L. No:</strong> MH-GON-2024-00129 / 130<br>
+          <strong>GSTIN:</strong> 27AABCK1234F1Z5
+        </div>
+      </div>
+    </div>
+
+    <!-- INVOICE METADATA & CUSTOMER INFO -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:0.8rem">
+      <div>
+        <div style="color:#64748B;font-size:0.7rem;text-transform:uppercase;font-weight:700">Billed To (Customer / Patient)</div>
+        <div style="font-size:0.95rem;font-weight:800;color:#0F172A;margin-top:2px">${escapeHtml(order.customerName || 'Customer')}</div>
+        <div style="color:#334155;margin-top:2px">📞 Mobile: <strong>${escapeHtml(order.phone || 'N/A')}</strong></div>
+        <div style="color:#475569;margin-top:2px;line-height:1.3">📍 ${escapeHtml(order.deliveryAddress || 'Gondia Store Delivery')}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="color:#64748B;font-size:0.7rem;text-transform:uppercase;font-weight:700">Invoice Details</div>
+        <div style="font-size:0.95rem;font-weight:800;color:#047857;margin-top:2px">INV-${escapeHtml(order.id)}</div>
+        <div style="color:#334155;margin-top:2px">Date: <strong>${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</strong></div>
+        <div style="color:#334155;margin-top:2px">Payment: <strong>${escapeHtml(order.paymentMethod || 'UPI')} (${escapeHtml(order.paymentStatus || 'Paid')})</strong></div>
+        ${order.prescriptionId ? `<div style="color:#2563EB;font-weight:600;margin-top:2px">Rx Ref: #${order.prescriptionId}</div>` : ''}
+      </div>
+    </div>
+
+    <!-- MEDICINES TABLE -->
+    <table style="width:100%;border-collapse:collapse;font-size:0.8rem;margin-bottom:16px">
+      <thead>
+        <tr style="background:#047857;color:white;text-align:left">
+          <th style="padding:8px 10px;width:35px">#</th>
+          <th style="padding:8px 10px">Description of Medicine</th>
+          <th style="padding:8px 10px">Mfg/Brand</th>
+          <th style="padding:8px 10px;text-align:center">Pack</th>
+          <th style="padding:8px 10px;text-align:center">Qty</th>
+          <th style="padding:8px 10px;text-align:right">Rate (₹)</th>
+          <th style="padding:8px 10px;text-align:right">Amount (₹)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${items.map((it, idx) => {
+          const qty = it.qty || 1;
+          const rate = Number(it.price) || 0;
+          const amt = (qty * rate).toFixed(2);
+          return `
+            <tr style="border-bottom:1px solid #E2E8F0;background:${idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC'}">
+              <td style="padding:8px 10px;color:#64748B">${idx + 1}</td>
+              <td style="padding:8px 10px;font-weight:700;color:#0F172A">
+                ${escapeHtml(it.name)}
+                ${it.salt ? `<div style="font-size:0.7rem;color:#64748B;font-weight:normal">${escapeHtml(it.salt)}</div>` : ''}
+              </td>
+              <td style="padding:8px 10px;color:#475569">${escapeHtml(it.brand || 'Generic')}</td>
+              <td style="padding:8px 10px;text-align:center;color:#475569">${escapeHtml(it.packUnit || 'strip')}</td>
+              <td style="padding:8px 10px;text-align:center;font-weight:700">${qty}</td>
+              <td style="padding:8px 10px;text-align:right">₹${rate.toFixed(2)}</td>
+              <td style="padding:8px 10px;text-align:right;font-weight:700">₹${amt}</td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+    </table>
+
+    <!-- TOTALS & TAX BREAKDOWN -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;border-top:1px solid #CBD5E1;padding-top:12px;margin-bottom:20px">
+      <div style="font-size:0.75rem;color:#475569;max-width:380px;line-height:1.4">
+        <strong>GST Breakdown:</strong> Includes CGST (6%) ₹${cgst} &amp; SGST (6%) ₹${sgst}.<br>
+        <strong>Terms &amp; Conditions:</strong><br>
+        1. Please consult doctor before taking prescribed dosage.<br>
+        2. Medicines once sold cannot be returned without original cash memo within 7 days.<br>
+        3. Store all medications in a cool and dry place away from direct sunlight.
+      </div>
+      <div style="min-width:240px;text-align:right;font-size:0.82rem">
+        <div style="display:flex;justify-content:space-between;padding:3px 0;color:#475569">
+          <span>Items Subtotal:</span>
+          <strong>₹${subtotal.toFixed(2)}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0;color:#475569">
+          <span>Delivery / Handling:</span>
+          <strong>${delivery === 0 ? 'FREE' : `₹${delivery.toFixed(2)}`}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:4px;border-top:2px solid #047857;font-size:1.1rem;font-weight:900;color:#047857">
+          <span>NET PAYABLE:</span>
+          <span>₹${grandTotal.toFixed(2)}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SIGNATURE & PHARMACIST AUTH -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:28px;padding-top:16px;border-top:1px dashed #CBD5E1">
+      <div style="font-size:0.72rem;color:#64748B">
+        Verified &amp; Dispensed by: <strong>Kirti Registered Pharmacist</strong><br>
+        Reg No: <strong>R-PH-MH-55241</strong> · Gondia Central Pharmacy
+      </div>
+      <div style="text-align:center">
+        <div style="font-weight:700;font-size:0.8rem;color:#1E293B">For KIRTI PHARMA &amp; SURGICALS</div>
+        <div style="height:32px"></div>
+        <div style="border-top:1px solid #475569;padding-top:4px;font-size:0.72rem;color:#475569;font-weight:600">
+          Authorized Pharmacist Signature
+        </div>
+      </div>
+    </div>
+  `;
+
+  openModal('invoice-modal');
 }
 
 // ===== DASHBOARD SEARCH =====
@@ -592,6 +1144,8 @@ function addToBill(medicineId) {
   billRows.push({ medicineId, qty: 1, unitPrice: med.price });
   if (currentPrescription) {
     renderBillBuilder(currentPrescription);
+  } else if (currentBillingOrder) {
+    renderBillBuilder(currentBillingOrder);
   } else {
     showToast(`${med.name} queued for next bill`, 'info');
   }
@@ -599,6 +1153,7 @@ function addToBill(medicineId) {
 }
 
 function openBillBuilder(prescriptionId) {
+  currentBillingOrder = null;
   currentPrescription = PRESCRIPTIONS.find(p => p.id === prescriptionId) ||
     completedPrescriptions.find(p => p.id === prescriptionId);
   if (!currentPrescription) return;
@@ -626,41 +1181,56 @@ function openBillBuilder(prescriptionId) {
   renderBillBuilder(currentPrescription);
 }
 
-function renderBillBuilder(prescription) {
+function renderBillBuilder(target) {
+  const current = target || currentPrescription || currentBillingOrder;
+  if (!current) return;
+
   const headerEl = document.getElementById('bill-patient-name');
   const tbody = document.getElementById('bill-table-body');
   const grandTotalEl = document.getElementById('bill-grand-total');
 
-  if (headerEl) headerEl.textContent = prescription.patient;
+  if (headerEl) {
+    headerEl.textContent = current.customerName
+      ? `${current.customerName} (Order #${current.id})`
+      : (current.patient || 'Customer');
+  }
 
   // ─── Prescription preview panel ────────────────────────────────────────────
-  const previewPanel  = document.getElementById('rx-preview-panel');
+  const previewPanel = document.getElementById('rx-preview-panel');
   if (previewPanel) {
-    const rawFileUrl  = prescription.fileUrl  || prescription.fileurl  || '';
-    const fileName = prescription.fileName || prescription.filename || '';
-    const isPdf    = fileName.toLowerCase().endsWith('.pdf');
-    const viewUrl  = prescription.id ? `/api/prescriptions/${prescription.id}/file` : (rawFileUrl.includes('undefined') ? 'images/med_fever_pain.png' : rawFileUrl);
-    const previewSrc = (rawFileUrl && !rawFileUrl.includes('undefined')) ? rawFileUrl : viewUrl;
+    const hasRx = current.prescriptionId || current.fileUrl || current.fileurl;
+    if (hasRx) {
+      const rxId = current.prescriptionId || current.id;
+      const rawFileUrl = current.fileUrl || current.fileurl || '';
+      const fileName = current.fileName || current.filename || '';
+      const isPdf = fileName.toLowerCase().endsWith('.pdf');
+      const viewUrl = rxId ? `/api/prescriptions/${rxId}/file` : (rawFileUrl.includes('undefined') ? 'images/med_fever_pain.png' : rawFileUrl);
+      const previewSrc = (rawFileUrl && !rawFileUrl.includes('undefined')) ? rawFileUrl : viewUrl;
 
-    document.getElementById('rx-prev-patient').textContent = prescription.patient + ' — ' + (prescription.source || 'App');
-    document.getElementById('rx-prev-phone').textContent   = '📞 ' + (prescription.phone || 'N/A');
-    const notesEl = document.getElementById('rx-prev-notes');
-    if (notesEl) notesEl.textContent = prescription.notes ? ('📝 ' + prescription.notes) : '';
+      const patEl = document.getElementById('rx-prev-patient');
+      if (patEl) patEl.textContent = (current.patient || current.customerName || 'Customer') + ' — ' + (current.source || 'Order Prescription');
+      const phEl = document.getElementById('rx-prev-phone');
+      if (phEl) phEl.textContent = '📞 ' + (current.phone || 'N/A');
+      const notesEl = document.getElementById('rx-prev-notes');
+      if (notesEl) notesEl.textContent = current.notes ? ('📝 ' + current.notes) : '';
 
-    const imgEl     = document.getElementById('rx-prev-img');
-    const pdfEl     = document.getElementById('rx-prev-pdf');
-    const linkEl    = document.getElementById('rx-prev-link');
-    const fullLink  = document.getElementById('rx-prev-fulllink');
+      const imgEl = document.getElementById('rx-prev-img');
+      const pdfEl = document.getElementById('rx-prev-pdf');
+      const linkEl = document.getElementById('rx-prev-link');
+      const fullLink = document.getElementById('rx-prev-fulllink');
 
-    if (linkEl)   linkEl.href   = viewUrl;
-    if (fullLink) fullLink.href = viewUrl;
-    if (imgEl) {
-      imgEl.src = previewSrc;
-      imgEl.style.display = isPdf ? 'none' : 'block';
-      imgEl.onerror = () => { imgEl.src = `/api/prescriptions/${prescription.id}/file`; };
+      if (linkEl) linkEl.href = viewUrl;
+      if (fullLink) fullLink.href = viewUrl;
+      if (imgEl) {
+        imgEl.src = previewSrc;
+        imgEl.style.display = isPdf ? 'none' : 'block';
+        imgEl.onerror = () => { imgEl.src = `/api/prescriptions/${rxId}/file`; };
+      }
+      if (pdfEl) pdfEl.style.display = isPdf ? 'flex' : 'none';
+      previewPanel.style.display = 'block';
+    } else {
+      previewPanel.style.display = 'none';
     }
-    if (pdfEl)  pdfEl.style.display = isPdf ? 'flex' : 'none';
-    previewPanel.style.display = 'block';
   }
   // ───────────────────────────────────────────────────────────────────────────
 
@@ -670,7 +1240,7 @@ function renderBillBuilder(prescription) {
   if (!tbody) return;
 
   if (billRows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.875rem">No medicines added yet. Use "+ Bill" to add medicines above.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.875rem">No medicines in bill. Use "+ Bill" to add medicines or select an order/prescription.</td></tr>`;
     return;
   }
 
@@ -680,33 +1250,32 @@ function renderBillBuilder(prescription) {
     return `
       <tr>
         <td>
-          <select onchange="updateBillMedicine(${idx}, parseInt(this.value))" style="min-width:160px">
-            ${MEDICINES.filter(m => m.stock > 0).map(m =>
-              `<option value="${m.id}" ${m.id === row.medicineId ? 'selected' : ''}>${m.name}</option>`
+          <select onchange="updateBillMedicine(${idx}, parseInt(this.value))" style="min-width:160px;padding:5px 8px;border-radius:6px;border:1px solid var(--border)">
+            ${MEDICINES.map(m =>
+              `<option value="${m.id}" ${m.id === row.medicineId ? 'selected' : ''}>${m.name} (${m.brand}) — ₹${m.price}</option>`
             ).join('')}
           </select>
         </td>
         <td>
           <input type="number" min="1" max="20" value="${row.qty}"
             onchange="updateBillQty(${idx}, parseInt(this.value))"
-            style="width:64px;text-align:center">
+            style="width:64px;text-align:center;padding:5px;border:1px solid var(--border);border-radius:6px;font-weight:700">
         </td>
         <td style="font-weight:600">₹${row.unitPrice}</td>
-        <td style="font-weight:700">₹${total.toFixed(0)}</td>
+        <td style="font-weight:800;color:var(--primary-green)">₹${total.toFixed(0)}</td>
         <td>
-          <button onclick="removeBillRow(${idx})" class="btn btn-sm" style="color:var(--danger);background:var(--danger-light);padding:4px 8px">✕</button>
+          <button onclick="removeBillRow(${idx})" class="btn btn-sm" style="color:var(--danger);background:var(--danger-light);padding:4px 8px;border:none;border-radius:6px;cursor:pointer">✕</button>
         </td>
       </tr>
     `;
   }).join('');
 }
 
-
 function addBillRow() {
-  const firstAvailable = MEDICINES.find(m => m.stock > 0);
+  const firstAvailable = MEDICINES.find(m => m.stock > 0) || MEDICINES[0];
   if (!firstAvailable) return;
   billRows.push({ medicineId: firstAvailable.id, qty: 1, unitPrice: firstAvailable.price });
-  if (currentPrescription) renderBillBuilder(currentPrescription);
+  renderBillBuilder(currentPrescription || currentBillingOrder);
 }
 
 function updateBillMedicine(idx, medId) {
@@ -714,33 +1283,97 @@ function updateBillMedicine(idx, medId) {
   if (!med) return;
   billRows[idx].medicineId = medId;
   billRows[idx].unitPrice = med.price;
-  if (currentPrescription) renderBillBuilder(currentPrescription);
+  renderBillBuilder(currentPrescription || currentBillingOrder);
 }
 
 function updateBillQty(idx, qty) {
   if (qty < 1 || isNaN(qty)) qty = 1;
   billRows[idx].qty = Math.min(qty, 20);
-  if (currentPrescription) renderBillBuilder(currentPrescription);
+  renderBillBuilder(currentPrescription || currentBillingOrder);
 }
 
 function removeBillRow(idx) {
   billRows.splice(idx, 1);
-  if (currentPrescription) renderBillBuilder(currentPrescription);
+  renderBillBuilder(currentPrescription || currentBillingOrder);
 }
 
 function printInvoice() {
-  if (!currentPrescription || billRows.length === 0) {
+  if (billRows.length === 0) {
     showToast('Please add medicines to the bill before printing', 'error');
     return;
   }
+
+  if (currentBillingOrder) {
+    printOrderInvoice(currentBillingOrder.id, billRows);
+    return;
+  }
+
+  if (currentPrescription) {
+    const rxOrder = {
+      id: `RX-${currentPrescription.id}`,
+      customerName: currentPrescription.patient,
+      phone: currentPrescription.phone,
+      deliveryAddress: 'Gondia store customer (Prescription Pick-up)',
+      paymentMethod: 'Cash / Counter',
+      paymentStatus: 'Pending',
+      prescriptionId: currentPrescription.id,
+      items: billRows.map(r => {
+        const med = MEDICINES.find(m => m.id === r.medicineId);
+        return {
+          name: med ? med.name : 'Medicine',
+          brand: med ? med.brand : '',
+          salt: med ? med.salt : '',
+          packUnit: med ? med.packUnit : 'strip',
+          price: r.unitPrice,
+          qty: r.qty
+        };
+      })
+    };
+    printOrderInvoice(rxOrder.id, billRows);
+    return;
+  }
+
   window.print();
 }
 
 async function markAsReady() {
-  if (!currentPrescription) return;
-  const rxId = currentPrescription.id;
+  if (!currentPrescription && !currentBillingOrder) {
+    showToast('No active order or prescription selected to mark ready', 'error');
+    return;
+  }
 
-  // Finalize bill on backend and automatically convert into an active order
+  if (billRows.length === 0) {
+    showToast('Please add medicines to the bill before completing', 'error');
+    return;
+  }
+
+  // Case 1: Finalizing a live customer order
+  if (currentBillingOrder) {
+    const orderId = currentBillingOrder.id;
+    try {
+      const res = await fetch(`/api/orders/${orderId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'delivery' })
+      });
+      const json = await res.json();
+      if (json.success) {
+        showToast(`✅ Order #${orderId} billed and marked Out for Delivery! 🛵`, 'success');
+      }
+    } catch (err) {
+      showToast(`✅ Order #${orderId} marked as Ready!`, 'success');
+    }
+
+    billRows = [];
+    currentBillingOrder = null;
+    const section = document.getElementById('bill-builder-section');
+    if (section) section.style.display = 'none';
+    loadChemistOrdersFromApi();
+    return;
+  }
+
+  // Case 2: Finalizing a prescription and creating order
+  const rxId = currentPrescription.id;
   try {
     const res = await fetch(`/api/prescriptions/${rxId}/bill`, {
       method: 'POST',
